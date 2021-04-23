@@ -1,9 +1,11 @@
 package router
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -29,6 +31,23 @@ type MethodRouter struct {
 	route       [methodMax]Route // 路由
 	interceptor []HandleFunc     // 匹配前的拦截器
 	notMatch    []HandleFunc     // 匹配失败
+}
+
+// x509密钥对是配置的
+func (r *MethodRouter) ListenAndServeTLS(address string, certPEM, keyPEM string) error {
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return err
+	}
+	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if err != nil {
+		return err
+	}
+	var server http.Server
+	server.Handler = r
+	return server.Serve(tls.NewListener(listener, &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}))
 }
 
 // 设置全局拦截函数
