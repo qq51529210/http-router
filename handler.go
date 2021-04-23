@@ -15,17 +15,6 @@ import (
 // 处理请求的回调函数
 type HandleFunc func(*Context) bool
 
-// 过滤掉nil的HandleFunc
-func filteHandleFunc(handleFunc ...HandleFunc) []HandleFunc {
-	h := make([]HandleFunc, 0)
-	for i := 0; i < len(handleFunc); i++ {
-		if handleFunc[i] != nil {
-			h = append(h, handleFunc[i])
-		}
-	}
-	return h
-}
-
 // 用于处理一个静态文件
 type FileHandler struct {
 	File string // 文件路径/文件名
