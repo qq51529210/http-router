@@ -148,8 +148,8 @@ func testFatalError(t *testing.T, err error) {
 func Test_Router_Add_Match(t *testing.T) {
 	var router MethodRouter
 	var handler testHandler
-	router.SetInterceptor(handler.Interceptor)
-	router.SetNotMatch(handler.NotMatch)
+	router.Interceptor = append(router.Interceptor, handler.Interceptor)
+	router.NotMatch = append(router.NotMatch, handler.NotMatch)
 	// add
 	{
 		// 不能出现错误
@@ -219,7 +219,7 @@ func Test_Router_Add_Match(t *testing.T) {
 func Test_Router_Remove(t *testing.T) {
 	var handler testHandler
 	var router MethodRouter
-	router.SetNotMatch(handler.NotMatch)
+	router.NotMatch = append(router.NotMatch, handler.NotMatch)
 	// 添加路由
 	router.AddGet("/1", handler.Handle1)
 	router.AddGet("/1/:", handler.Handle2)
@@ -252,8 +252,8 @@ func Test_Router_Remove(t *testing.T) {
 func Test_Router_AddStatic(t *testing.T) {
 	var handler testHandler
 	var router MethodRouter
-	router.SetInterceptor(handler.Interceptor)
-	router.SetNotMatch(handler.NotMatch)
+	router.Interceptor = append(router.Interceptor, handler.Interceptor)
+	router.NotMatch = append(router.NotMatch, handler.NotMatch)
 	// 随机生成文件数据
 	random := rand.New(rand.NewSource(time.Now().Unix()))
 	fileData := make([]byte, random.Int31n(102400))
@@ -406,7 +406,7 @@ func (t *testBenchmark) benchmark(b *testing.B, url string, r http.Handler) {
 func Test_Benchmark(t *testing.T) {
 	var handler testHandler
 	testBench := testNewBenchmark()
-	testBench.myRouter.SetNotMatch(func(c *Context) bool {
+	testBench.myRouter.NotMatch = append(testBench.myRouter.NotMatch, func(c *Context) bool {
 		t.FailNow()
 		return false
 	})

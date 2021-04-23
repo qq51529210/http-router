@@ -26,38 +26,32 @@ const (
 	methodMax
 )
 
-// 匹配方法和路径的路由
-type MethodRouter struct {
-	route       [methodMax]Route // 路由
-	interceptor []HandleFunc     // 匹配前的拦截器
-	notMatch    []HandleFunc     // 匹配失败
-}
-
-// x509密钥对是配置的
-func (r *MethodRouter) ListenAndServeTLS(address string, certPEM, keyPEM string) error {
+func serveTLS(address string, certPEM, keyPEM []byte, handler http.Handler) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
-	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		return err
 	}
 	var server http.Server
-	server.Handler = r
+	server.Handler = handler
 	return server.Serve(tls.NewListener(listener, &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}))
 }
 
-// 设置全局拦截函数
-func (r *MethodRouter) SetInterceptor(handleFunc ...HandleFunc) {
-	r.interceptor = filteHandleFunc(handleFunc...)
+// 匹配方法和路径的路由
+type MethodRouter struct {
+	route       [methodMax]Route // 路由
+	Interceptor []HandleFunc     // 匹配前的拦截器
+	NotMatch    []HandleFunc     // 匹配失败
 }
 
-// 设置匹配失败处理函数
-func (r *MethodRouter) SetNotMatch(handleFunc ...HandleFunc) {
-	r.notMatch = filteHandleFunc(handleFunc...)
+// x509密钥对是配置的
+func (r *MethodRouter) ListenAndServeTLS(address string, certPEM, keyPEM string) error {
+	return serveTLS(address, []byte(certPEM), []byte(keyPEM), r)
 }
 
 // 实现http.Handler接口
@@ -69,8 +63,8 @@ func (r *MethodRouter) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	c.Param = c.Param[:0]
 	c.UserData = nil
 	// 拦截
-	for i := 0; i < len(r.interceptor); i++ {
-		if !r.interceptor[i](c) {
+	for i := 0; i < len(r.Interceptor); i++ {
+		if !r.Interceptor[i](c) {
 			contextPool.Put(c)
 			return
 		}
@@ -91,8 +85,8 @@ func (r *MethodRouter) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 	// 未匹配到
-	for i := 0; i < len(r.notMatch); i++ {
-		if !r.notMatch[i](c) {
+	for i := 0; i < len(r.NotMatch); i++ {
+		if !r.NotMatch[i](c) {
 			break
 		}
 	}
@@ -367,18 +361,13 @@ func (r *MethodRouter) add(root *Route, path string, handleFunc ...HandleFunc) (
 // 匹配路径的路由，可以用作api网关
 type PathRouter struct {
 	route       Route        // 路由
-	interceptor []HandleFunc // 匹配前的拦截器
-	notMatch    []HandleFunc // 匹配失败
+	Interceptor []HandleFunc // 匹配前的拦截器
+	NotMatch    []HandleFunc // 匹配失败
 }
 
-// 设置全局拦截函数
-func (r *PathRouter) SetInterceptor(handleFunc ...HandleFunc) {
-	r.interceptor = filteHandleFunc(handleFunc...)
-}
-
-// 设置匹配失败处理函数
-func (r *PathRouter) SetNotMatch(handleFunc ...HandleFunc) {
-	r.notMatch = filteHandleFunc(handleFunc...)
+// x509密钥对是配置的
+func (r *PathRouter) ListenAndServeTLS(address string, certPEM, keyPEM string) error {
+	return serveTLS(address, []byte(certPEM), []byte(keyPEM), r)
 }
 
 // 实现http.Handler接口
@@ -390,8 +379,8 @@ func (r *PathRouter) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	c.Param = c.Param[:0]
 	c.UserData = nil
 	// 拦截
-	for i := 0; i < len(r.interceptor); i++ {
-		if !r.interceptor[i](c) {
+	for i := 0; i < len(r.Interceptor); i++ {
+		if !r.Interceptor[i](c) {
 			contextPool.Put(c)
 			return
 		}
@@ -409,8 +398,8 @@ func (r *PathRouter) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 	// 未匹配到
-	for i := 0; i < len(r.notMatch); i++ {
-		if !r.notMatch[i](c) {
+	for i := 0; i < len(r.NotMatch); i++ {
+		if !r.NotMatch[i](c) {
 			break
 		}
 	}

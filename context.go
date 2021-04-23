@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -160,4 +161,52 @@ func (c *Context) SHA256(s string) string {
 	s = h.Hash(s)
 	sha256Pool.Put(h)
 	return s
+}
+
+// 分页查询结果
+type PageData struct {
+	Total int64       `json:"total"` // 总数
+	Data  interface{} `json:"data"`  // 数据
+}
+
+// 分页查询参数
+type PageQuery struct {
+	Order string // 排序的字段名
+	Sort  string // 排序的方式
+	Begin int64  // 分页起始
+	Total int64  // 分页总数
+}
+
+// 解析分页查询的参数，解析begin和total错误时返回，比如，"/users?order=id&sort=desc&begin=1&total=10"
+// var q PageQuer
+// q.Order = "id"
+// q.Sort = "asc"
+// // 初始化字段，如果没有相应的参数，不会赋值的
+// c.ParsePageQuery(&q)
+func (c *Context) ParsePageQuery(q *PageQuery) error {
+	order := c.Request.FormValue("order")
+	if order != "" {
+		q.Order = order
+	}
+	sort := c.Request.FormValue("sort")
+	if sort != "" {
+		q.Sort = sort
+	}
+	val := c.Request.FormValue("begin")
+	if val != "" {
+		begin, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+		q.Begin = begin
+	}
+	val = c.Request.FormValue("total")
+	if val != "" {
+		total, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return err
+		}
+		q.Total = total
+	}
+	return nil
 }
