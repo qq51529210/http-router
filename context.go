@@ -210,3 +210,17 @@ func (c *Context) ParsePageQuery(q *PageQuery) error {
 	}
 	return nil
 }
+
+// 返回request.header.Authorization的token
+func (c *Context) BearerToken() string {
+	// 没有header
+	token := c.Request.Header.Get("Authorization")
+	if token == "" {
+		return ""
+	}
+	const bearerTokenPrefix = "Bearer "
+	if !strings.HasPrefix(token, bearerTokenPrefix) {
+		return ""
+	}
+	return token[len(bearerTokenPrefix):]
+}
