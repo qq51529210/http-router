@@ -115,7 +115,7 @@ if !router.Remove("/users"){
 
 ## 测试
 
-my与beego和gin框架的路由benchmark比较，四种路由，共10层目录。
+my与beego和gin框架的路由benchmark比较，四种路由，共10层目录。router_test.go的注释掉了benchmark相关的代码。
 
 - 全静态，/static0.../static9
 - 全参数，/param0.../param9

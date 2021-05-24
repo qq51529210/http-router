@@ -12,10 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/astaxie/beego"
-	beego_context "github.com/astaxie/beego/context"
-	"github.com/gin-gonic/gin"
+	// "github.com/astaxie/beego"
+	// beego_context "github.com/astaxie/beego/context"
+	// "github.com/gin-gonic/gin"
 )
 
 func Test_diffString(t *testing.T) {
@@ -307,8 +306,8 @@ type testBenchmark struct {
 	staticParamRoute, staticParamUrl [3]strings.Builder
 	paramStaticRoute, paramStaticUrl [3]strings.Builder
 	myRouter                         MethodRouter
-	ginRouter                        *gin.Engine
-	beegoRouter                      *beego.ControllerRegister
+	// 	ginRouter                        *gin.Engine
+	// 	beegoRouter                      *beego.ControllerRegister
 }
 
 func (t *testBenchmark) Init() {
@@ -368,19 +367,19 @@ func (t *testBenchmark) Init() {
 	t.myRouter.AddGet(t.paramRoute[0].String(), func(c *Context) bool { return true })
 	t.myRouter.AddGet(t.staticParamRoute[0].String(), func(c *Context) bool { return true })
 	t.myRouter.AddGet(t.paramStaticRoute[0].String(), func(c *Context) bool { return true })
-	// gin
-	gin.SetMode(gin.ReleaseMode)
-	t.ginRouter = gin.New()
-	t.ginRouter.GET(t.staticRoute.String(), func(c *gin.Context) {})
-	t.ginRouter.GET(t.paramRoute[1].String(), func(c *gin.Context) {})
-	t.ginRouter.GET(t.staticParamRoute[1].String(), func(c *gin.Context) {})
-	t.ginRouter.GET(t.paramStaticRoute[1].String(), func(c *gin.Context) {})
-	// beego
-	t.beegoRouter = beego.NewApp().Handlers
-	t.beegoRouter.Get(t.staticRoute.String(), func(c *beego_context.Context) {})
-	t.beegoRouter.Get(t.paramRoute[2].String(), func(c *beego_context.Context) {})
-	t.beegoRouter.Get(t.staticParamRoute[2].String(), func(c *beego_context.Context) {})
-	t.beegoRouter.Get(t.paramStaticRoute[2].String(), func(c *beego_context.Context) {})
+	// 	// gin
+	// 	gin.SetMode(gin.ReleaseMode)
+	// 	t.ginRouter = gin.New()
+	// 	t.ginRouter.GET(t.staticRoute.String(), func(c *gin.Context) {})
+	// 	t.ginRouter.GET(t.paramRoute[1].String(), func(c *gin.Context) {})
+	// 	t.ginRouter.GET(t.staticParamRoute[1].String(), func(c *gin.Context) {})
+	// 	t.ginRouter.GET(t.paramStaticRoute[1].String(), func(c *gin.Context) {})
+	// 	// beego
+	// 	t.beegoRouter = beego.NewApp().Handlers
+	// 	t.beegoRouter.Get(t.staticRoute.String(), func(c *beego_context.Context) {})
+	// 	t.beegoRouter.Get(t.paramRoute[2].String(), func(c *beego_context.Context) {})
+	// 	t.beegoRouter.Get(t.staticParamRoute[2].String(), func(c *beego_context.Context) {})
+	// 	t.beegoRouter.Get(t.paramStaticRoute[2].String(), func(c *beego_context.Context) {})
 }
 
 func testNewBenchmark() *testBenchmark {
@@ -414,31 +413,22 @@ func Test_Benchmark(t *testing.T) {
 	testHttpGet(testBench.paramUrl[0].String(), &handler, &testBench.myRouter)
 	testHttpGet(testBench.staticParamUrl[0].String(), &handler, &testBench.myRouter)
 	testHttpGet(testBench.paramStaticUrl[0].String(), &handler, &testBench.myRouter)
-	//
-	testBench.ginRouter.NoRoute(func(c *gin.Context) {
-		t.FailNow()
-	})
-	testHttpGet(testBench.staticUrl.String(), &handler, testBench.ginRouter)
-	testHttpGet(testBench.paramUrl[1].String(), &handler, testBench.ginRouter)
-	testHttpGet(testBench.staticParamUrl[1].String(), &handler, testBench.ginRouter)
-	testHttpGet(testBench.paramStaticUrl[1].String(), &handler, testBench.ginRouter)
-	//
-	beego.ErrorHandler("404", func(writer http.ResponseWriter, request *http.Request) {
-		t.FailNow()
-	})
-	testHttpGet(testBench.staticUrl.String(), &handler, testBench.beegoRouter)
-	testHttpGet(testBench.paramUrl[2].String(), &handler, testBench.beegoRouter)
-	testHttpGet(testBench.staticParamUrl[2].String(), &handler, testBench.beegoRouter)
-	testHttpGet(testBench.paramStaticUrl[2].String(), &handler, testBench.beegoRouter)
-	// //
-	// for i := 0; i < 3; i++ {
-	// 	t.Log(testBench.paramRoute[i].String())
-	// 	t.Log(testBench.paramUrl[i].String())
-	// 	t.Log(testBench.staticParamRoute[i].String())
-	// 	t.Log(testBench.staticParamUrl[i].String())
-	// 	t.Log(testBench.paramStaticRoute[i].String())
-	// 	t.Log(testBench.paramStaticUrl[i].String())
-	// }
+	// // gin
+	// testBench.ginRouter.NoRoute(func(c *gin.Context) {
+	// 	t.FailNow()
+	// })
+	// testHttpGet(testBench.staticUrl.String(), &handler, testBench.ginRouter)
+	// testHttpGet(testBench.paramUrl[1].String(), &handler, testBench.ginRouter)
+	// testHttpGet(testBench.staticParamUrl[1].String(), &handler, testBench.ginRouter)
+	// testHttpGet(testBench.paramStaticUrl[1].String(), &handler, testBench.ginRouter)
+	// // beego
+	// beego.ErrorHandler("404", func(writer http.ResponseWriter, request *http.Request) {
+	// 	t.FailNow()
+	// })
+	// testHttpGet(testBench.staticUrl.String(), &handler, testBench.beegoRouter)
+	// testHttpGet(testBench.paramUrl[2].String(), &handler, testBench.beegoRouter)
+	// testHttpGet(testBench.staticParamUrl[2].String(), &handler, testBench.beegoRouter)
+	// testHttpGet(testBench.paramStaticUrl[2].String(), &handler, testBench.beegoRouter)
 }
 
 func Benchmark_Match_My_Static(b *testing.B) {
@@ -446,57 +436,57 @@ func Benchmark_Match_My_Static(b *testing.B) {
 	testBench.benchmark(b, testBench.staticUrl.String(), &testBench.myRouter)
 }
 
-func Benchmark_Match_Gin_Static(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.staticUrl.String(), testBench.ginRouter)
-}
+// func Benchmark_Match_Gin_Static(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.staticUrl.String(), testBench.ginRouter)
+// }
 
-func Benchmark_Match_Beego_Static(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.staticUrl.String(), testBench.beegoRouter)
-}
+// func Benchmark_Match_Beego_Static(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.staticUrl.String(), testBench.beegoRouter)
+// }
 
 func Benchmark_Match_My_Param(b *testing.B) {
 	testBench := testNewBenchmark()
 	testBench.benchmark(b, testBench.paramUrl[0].String(), &testBench.myRouter)
 }
 
-func Benchmark_Match_Gin_Param(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.paramUrl[1].String(), testBench.ginRouter)
-}
+// func Benchmark_Match_Gin_Param(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.paramUrl[1].String(), testBench.ginRouter)
+// }
 
-func Benchmark_Match_Beego_Param(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.paramUrl[2].String(), testBench.beegoRouter)
-}
+// func Benchmark_Match_Beego_Param(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.paramUrl[2].String(), testBench.beegoRouter)
+// }
 
 func Benchmark_Match_My_StaticParam(b *testing.B) {
 	testBench := testNewBenchmark()
 	testBench.benchmark(b, testBench.staticParamUrl[0].String(), &testBench.myRouter)
 }
 
-func Benchmark_Match_Gin_StaticParam(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.staticParamUrl[1].String(), testBench.ginRouter)
-}
+// func Benchmark_Match_Gin_StaticParam(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.staticParamUrl[1].String(), testBench.ginRouter)
+// }
 
-func Benchmark_Match_Beego_StaticParam(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.staticParamUrl[2].String(), testBench.beegoRouter)
-}
+// func Benchmark_Match_Beego_StaticParam(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.staticParamUrl[2].String(), testBench.beegoRouter)
+// }
 
 func Benchmark_Match_My_ParamStatic(b *testing.B) {
 	testBench := testNewBenchmark()
 	testBench.benchmark(b, testBench.paramStaticUrl[0].String(), &testBench.myRouter)
 }
 
-func Benchmark_Match_Gin_ParamStatic(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.paramStaticUrl[1].String(), testBench.ginRouter)
-}
+// func Benchmark_Match_Gin_ParamStatic(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.paramStaticUrl[1].String(), testBench.ginRouter)
+// }
 
-func Benchmark_Match_Beego_ParamStatic(b *testing.B) {
-	testBench := testNewBenchmark()
-	testBench.benchmark(b, testBench.paramStaticUrl[2].String(), testBench.beegoRouter)
-}
+// func Benchmark_Match_Beego_ParamStatic(b *testing.B) {
+// 	testBench := testNewBenchmark()
+// 	testBench.benchmark(b, testBench.paramStaticUrl[2].String(), testBench.beegoRouter)
+// }
