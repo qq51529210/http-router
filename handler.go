@@ -12,25 +12,28 @@ import (
 	"time"
 )
 
-// 处理请求的回调函数
 type HandleFunc func(*Context) bool
 
-// 用于处理一个静态文件
+// Handle static file.
 type FileHandler struct {
-	File string // 文件路径/文件名
+	// Local file path.
+	File string
 }
 
+// Can be use as HandlerFunc
 func (h *FileHandler) Handle(c *Context) bool {
-	http.ServeFile(c.Response, c.Request, h.File)
+	http.ServeFile(c.Res, c.Req, h.File)
 	return true
 }
 
 var errSeekOffset = errors.New("seek: invalid offset")
 
-// 实现io.ReadSeeker，http.ServeContent()需要的参数
+// Implements io.ReadSeeker, pass to http.ServeContent().
 type cacheSeeker struct {
-	b []byte // 数据
-	i int64  // seek下标
+	// Data
+	b []byte
+	// Seek index.
+	i int64
 }
 
 func (s *cacheSeeker) Seek(o int64, w int) (int64, error) {
@@ -65,6 +68,7 @@ func (s *cacheSeeker) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+// Compression algorithm
 const (
 	gzipCompress = iota
 	zlibCompress
@@ -72,6 +76,7 @@ const (
 )
 
 var (
+	// Create compressor functions.
 	compressFunc = []func(io.Writer) io.WriteCloser{
 		func(w io.Writer) io.WriteCloser {
 			return gzip.NewWriter(w)
@@ -91,57 +96,60 @@ var (
 	}
 )
 
-// 用于处理一个数据缓存
+// Handle memory cache.
 type CacheHandler struct {
-	ContentType  string    // response header Content-Type
-	ModTime      time.Time // modify time
-	Data         []byte    // 原始数据
-	compressData [3][]byte // 压缩后的数据
+	ContentType string
+	// Data modify time.
+	ModTime time.Time
+	// Origin data.
+	Data           []byte
+	compressedData [3][]byte
 }
 
+// Check client compressions and response compressed data.
+// Can be use as HandlerFunc.
 func (h *CacheHandler) Handle(c *Context) bool {
-	// 设置Content-type
 	if h.ContentType != "" {
-		c.Response.Header().Set("Content-Type", h.ContentType)
+		c.Res.Header().Set("Content-Type", h.ContentType)
 	}
-	// 检查客户端是否支持压缩
-	for _, s := range strings.Split(c.Request.Header.Get("Accept-Encoding"), ",") {
+	// Check client compressions
+	for _, s := range strings.Split(c.Req.Header.Get("Accept-Encoding"), ",") {
 		switch s {
-		case "*", "gzip": // 支持所有，或者gzip
+		case "*", "gzip":
 			h.serveContent(c, gzipCompress)
 			return true
-		case "zlib": // 支持zlib
+		case "zlib":
 			h.serveContent(c, zlibCompress)
 			return true
-		case "deflate": // 支持deflate
+		case "deflate":
 			h.serveContent(c, deflateCompress)
 			return true
 		default:
 			continue
 		}
 	}
-	// 客户端不支持压缩
-	http.ServeContent(c.Response, c.Request, "", h.ModTime, &cacheSeeker{b: h.Data})
+	// Handler does not has client compressions.
+	http.ServeContent(c.Res, c.Req, "", h.ModTime, &cacheSeeker{b: h.Data})
 	return true
 }
 
-// 压缩数据，并返回。每种算法只进行一次压缩，而且，如果压缩后的数据比原来的大，那么返回的是原来的数据。
+// Compress data and response. But if compressed data is bigger than origin data, return origin data.
+// Compression is done when first called, and can not modify the compressed data by modify origin data.
 func (h *CacheHandler) serveContent(c *Context, n int) {
-	// 懒加载压缩数据
-	if len(h.compressData[n]) < 1 {
+	// Compress data if is empty.
+	if len(h.compressedData[n]) < 1 {
 		var buf bytes.Buffer
 		w := compressFunc[n](&buf)
-		// 不处理error，因为bytes.Buffer.Write不会返回error
-		_, _ = w.Write(h.Data)
-		_ = w.Close()
-		h.compressData[n] = append(h.compressData[n], buf.Bytes()...)
+		w.Write(h.Data)
+		w.Close()
+		h.compressedData[n] = append(h.compressedData[n], buf.Bytes()...)
 	}
-	// 返回压缩数据
-	if len(h.compressData[n]) < len(h.Data) {
-		c.Response.Header().Set("Content-Encoding", compressName[n])
-		http.ServeContent(c.Response, c.Request, "", h.ModTime, &cacheSeeker{b: h.compressData[n]})
+	// Response compressed data.
+	if len(h.compressedData[n]) < len(h.Data) {
+		c.Res.Header().Set("Content-Encoding", compressName[n])
+		http.ServeContent(c.Res, c.Req, "", h.ModTime, &cacheSeeker{b: h.compressedData[n]})
 		return
 	}
-	// 压缩后的数据比压缩前还大，就返回压缩前的
-	http.ServeContent(c.Response, c.Request, "", h.ModTime, &cacheSeeker{b: h.Data})
+	// Response origin data.
+	http.ServeContent(c.Res, c.Req, "", h.ModTime, &cacheSeeker{b: h.Data})
 }

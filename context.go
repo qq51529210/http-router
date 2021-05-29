@@ -18,26 +18,27 @@ import (
 )
 
 var (
-	contextPool sync.Pool // context池
-	//
+	// Context pool.
+	contextPool sync.Pool
+	// Content-Type.
 	contentTypeJSON = mime.TypeByExtension(".json")
 	contentTypeHTML = mime.TypeByExtension(".html")
-	//
+	// Hash pool.
 	md5Pool    sync.Pool
 	sha1Pool   sync.Pool
 	sha256Pool sync.Pool
-	//
-	randBytes []byte                                        // 随机字符
-	random    = rand.New(rand.NewSource(time.Now().Unix())) // 随机数
+	// Random bytes, user for Context.RandomXXX
+	randBytes []byte
+	random    = rand.New(rand.NewSource(time.Now().Unix()))
 )
 
-// 初始化Context缓存
 func init() {
+	// Context pool.
 	contextPool.New = func() interface{} {
 		c := new(Context)
 		return c
 	}
-	// 哈希池
+	// Content-Type.
 	md5Pool.New = func() interface{} {
 		return &hashBuffer{
 			hash: md5.New(),
@@ -59,7 +60,7 @@ func init() {
 			sum:  make([]byte, sha256.Size),
 		}
 	}
-	// 随机字符
+	// Random bytes.
 	for i := '0'; i <= '9'; i++ {
 		randBytes = append(randBytes, byte(i))
 	}
@@ -71,20 +72,19 @@ func init() {
 	}
 }
 
-// 设置RandomString产生的字符，不是同步的
 func SetRandomBytes(b []byte) {
 	randBytes = make([]byte, len(b))
 	copy(randBytes, b)
 }
 
-// 用于做hash运算的缓存
+// Use for hash operation.
 type hashBuffer struct {
 	hash hash.Hash
 	buf  []byte
 	sum  []byte
 }
 
-// hash并转成15进制
+// Return hex string of s hash result.
 func (h *hashBuffer) Hash(s string) string {
 	h.buf = h.buf[:0]
 	h.buf = append(h.buf, s...)
@@ -96,32 +96,41 @@ func (h *hashBuffer) Hash(s string) string {
 	return string(h.buf)
 }
 
-// 路由匹配的上下文数据，HandleFunc的参数
-type Context struct {
-	Request  *http.Request       // http.ServeHTTP接口参数
-	Response http.ResponseWriter // http.ServeHTTP接口参数
-	Param    []string            // 参数路由的值
-	UserData interface{}         // 应用有时候需要在调用链中传递一些数据
+// Use hash of p to hash s.
+func hashPoolHash(p *sync.Pool, s string) string {
+	h := p.Get().(*hashBuffer)
+	s = h.Hash(s)
+	p.Put(h)
+	return s
 }
 
-// 将v格式化成JSON，设置Content-Type，写入response
+// Keep context data in the handler chain.
+type Context struct {
+	Req *http.Request
+	Res http.ResponseWriter
+	// The values of the parameter route, in the order of registration.
+	Param []string
+	// Keep user data in the handler chain.
+	Data interface{}
+}
+
+// Set Content-Type and statusCode, convert data to JSON and write to body,
 func (c *Context) WriteJSON(statusCode int, data interface{}) error {
-	c.Response.WriteHeader(statusCode)
-	c.Response.Header().Set("Content-Type", contentTypeJSON)
-	enc := json.NewEncoder(c.Response)
+	c.Res.WriteHeader(statusCode)
+	c.Res.Header().Set("Content-Type", contentTypeJSON)
+	enc := json.NewEncoder(c.Res)
 	return enc.Encode(data)
 }
 
-// 设置Content-Type，写入response
+// Set Content-Type and statusCode, write to text body,
 func (c *Context) WriteHTML(statusCode int, text string) error {
-	c.Response.WriteHeader(statusCode)
-	c.Response.Header().Set("Content-Type", contentTypeHTML)
-	// http.ResponseWriter底层是bufio.Writer
-	_, err := io.WriteString(c.Response, text)
+	c.Res.WriteHeader(statusCode)
+	c.Res.Header().Set("Content-Type", contentTypeHTML)
+	_, err := io.WriteString(c.Res, text)
 	return err
 }
 
-// 返回随机字符串"a-z 0-9 A-Z"，n:长度
+// Return n length random string in range of randBytes.
 func (c *Context) RandomString(n int) string {
 	var str strings.Builder
 	for i := 0; i < n; i++ {
@@ -130,7 +139,7 @@ func (c *Context) RandomString(n int) string {
 	return str.String()
 }
 
-// 随机数字字符串"0-9"，n:长度
+// Return n length random number string in range of 0-9.
 func (c *Context) RandomNumber(n int) string {
 	var str strings.Builder
 	for i := 0; i < n; i++ {
@@ -139,60 +148,54 @@ func (c *Context) RandomNumber(n int) string {
 	return str.String()
 }
 
-// 对字符串s作md5的运算，然后返回16进制的字符串值
+// Return hex string of s MD5 result.
 func (c *Context) MD5(s string) string {
-	h := md5Pool.Get().(*hashBuffer)
-	s = h.Hash(s)
-	md5Pool.Put(h)
-	return s
+	return hashPoolHash(&md5Pool, s)
 }
 
-// 对字符串s作sha1的运算，然后返回16进制的字符串值
+// Return hex string of s SHA1 result.
 func (c *Context) SHA1(s string) string {
-	h := sha1Pool.Get().(*hashBuffer)
-	s = h.Hash(s)
-	sha1Pool.Put(h)
-	return s
+	return hashPoolHash(&sha1Pool, s)
 }
 
-// 对字符串s作sha256的运算，然后返回16进制的字符串值
+// Return hex string of s SHA256 result.
 func (c *Context) SHA256(s string) string {
-	h := sha256Pool.Get().(*hashBuffer)
-	s = h.Hash(s)
-	sha256Pool.Put(h)
-	return s
+	return hashPoolHash(&sha256Pool, s)
 }
 
-// 分页查询结果
+// Json response of page query.
 type PageData struct {
-	Total int64       `json:"total"` // 总数
-	Data  interface{} `json:"data"`  // 数据
+	// Total data.
+	Total int64 `json:"total"`
+	// Data list.
+	Data interface{} `json:"data"`
 }
 
-// 分页查询参数
+// Page query conditions.
 type PageQuery struct {
-	Order string // 排序的字段名
-	Sort  string // 排序的方式
-	Begin int64  // 分页起始
-	Total int64  // 分页总数
+	// ASC or DESC.
+	Order string
+	// Field name used for sort data.
+	Sort string
+	// Begin of data.
+	Begin int64
+	// Total of data.
+	Total int64
 }
 
-// 解析分页查询的参数，解析begin和total错误时返回，比如，"/users?order=id&sort=desc&begin=1&total=10"
-// var q PageQuer
-// q.Order = "id"
-// q.Sort = "asc"
-// // 初始化字段，如果没有相应的参数，不会赋值的
-// c.ParsePageQuery(&q)
+// Try to parse url queries value to q.
+// Example: "/users?sort=id&order=desc&begin=1&total=10".
+// It return error if fail to parse begin or total.
 func (c *Context) ParsePageQuery(q *PageQuery) error {
-	order := c.Request.FormValue("order")
+	order := c.Req.FormValue("order")
 	if order != "" {
 		q.Order = order
 	}
-	sort := c.Request.FormValue("sort")
+	sort := c.Req.FormValue("sort")
 	if sort != "" {
 		q.Sort = sort
 	}
-	val := c.Request.FormValue("begin")
+	val := c.Req.FormValue("begin")
 	if val != "" {
 		begin, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
@@ -200,7 +203,7 @@ func (c *Context) ParsePageQuery(q *PageQuery) error {
 		}
 		q.Begin = begin
 	}
-	val = c.Request.FormValue("total")
+	val = c.Req.FormValue("total")
 	if val != "" {
 		total, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
@@ -211,10 +214,10 @@ func (c *Context) ParsePageQuery(q *PageQuery) error {
 	return nil
 }
 
-// 返回request.header.Authorization的token
+// Return header["Authorization"] Bearer token.
 func (c *Context) BearerToken() string {
 	// 没有header
-	token := c.Request.Header.Get("Authorization")
+	token := c.Req.Header.Get("Authorization")
 	if token == "" {
 		return ""
 	}

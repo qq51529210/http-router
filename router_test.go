@@ -52,64 +52,54 @@ func Test_splitPath(t *testing.T) {
 }
 
 type testHandler struct {
-	header http.Header  // 接受http.ResponseWriter接口的数据
-	buffer bytes.Buffer // 接受http.ResponseWriter接口的数据
-	funcs  []string     // 函数被调用链
-	param  []string     // 路由参数
+	header http.Header
+	buffer bytes.Buffer
+	funcs  []string
+	param  []string
 }
 
-// http.ResponseWriter接口
 func (r *testHandler) Header() (h http.Header) {
 	return r.header
 }
 
-// http.ResponseWriter接口
 func (r *testHandler) Write(b []byte) (n int, err error) {
 	return r.buffer.Write(b)
 }
 
-// http.ResponseWriter接口
 func (r *testHandler) WriteString(s string) (n int, err error) {
 	return r.buffer.WriteString(s)
 }
 
-// http.ResponseWriter接口
 func (r *testHandler) WriteHeader(int) {
 }
 
-// 重置
 func (r *testHandler) Reset() {
 	r.header = make(http.Header)
 	r.buffer.Reset()
 	r.funcs = make([]string, 0)
 }
 
-// 拦截器
-func (r *testHandler) Interceptor(c *Context) bool {
-	r.funcs = append(r.funcs, "Interceptor")
+func (r *testHandler) Intercept(c *Context) bool {
+	r.funcs = append(r.funcs, "Intercept")
 	return true
 }
 
-// 匹配失败
 func (r *testHandler) NotMatch(c *Context) bool {
 	r.funcs = append(r.funcs, "NotMatch")
 	return false
 }
 
-// Handle1
 func (r *testHandler) Handle1(c *Context) bool {
 	r.funcs = append(r.funcs, "Handle1")
 	r.param = append(r.param, c.Param...)
 	return true
 }
 
-// Handle2
 func (r *testHandler) Handle2(c *Context) bool {
 	r.funcs = append(r.funcs, "Handle2")
 	return true
 }
 
-// 模拟http get请求
 func testHttpGet(url string, handler *testHandler, router http.Handler) {
 	handler.Reset()
 	q, _ := http.NewRequest(http.MethodGet, url, nil)
@@ -118,7 +108,6 @@ func testHttpGet(url string, handler *testHandler, router http.Handler) {
 	router.ServeHTTP(handler, q)
 }
 
-// 打印route的所有路由
 func testPrintRoute(route *Route, name []string, t *testing.T) {
 	name = append(name, route.name)
 	if route.param != nil {
@@ -137,7 +126,6 @@ func testPrintRoute(route *Route, name []string, t *testing.T) {
 	}
 }
 
-// 错误Fatal
 func testFatalError(t *testing.T, err error) {
 	if err != nil {
 		t.Fatal(err)
@@ -147,69 +135,69 @@ func testFatalError(t *testing.T, err error) {
 func Test_Router_Add_Match(t *testing.T) {
 	var router MethodRouter
 	var handler testHandler
-	router.Interceptor = append(router.Interceptor, handler.Interceptor)
+	router.Intercept = append(router.Intercept, handler.Intercept)
 	router.NotMatch = append(router.NotMatch, handler.NotMatch)
-	// add
+	// Test add.
 	{
-		// 不能出现错误
+		// Add must success.
 		addOK := func(route *Route, err error) {
 			if err != nil {
 				t.Log(err)
 				t.FailNow()
 			}
 		}
-		// 必须出现错误
+		// Add must error
 		addErr := func(route *Route, err error) {
 			if err == nil {
 				t.FailNow()
 			}
 			t.Log(err)
 		}
-		// 添加相同的路径
+		// Add same route.
 		addOK(router.AddGet("/00"))
 		addOK(router.AddGet("/00"))
-		// 同一层目录下，添加不同的静态路径
+		// Add different static route with same prefix '/'.
 		addOK(router.AddGet("/01"))
 		addOK(router.AddGet("/1/0"))
 		addOK(router.AddGet("/11/:/1"))
 		addOK(router.AddGet("/111/*"))
-		// 同一层目录下，不能同时添加静态路径和参数路径
+		// Add param route and static route to '/' at the same time.
 		addErr(router.AddGet("/:"))
 		addErr(router.AddGet("/*"))
 		addErr(router.AddGet("/1/:"))
 		addErr(router.AddGet("/1/*"))
-		// 不能在全匹配后面添加任何的路径
+		// Add route after a all match route.
 		addOK(router.AddGet("/2/*"))
 		addErr(router.AddGet("/2/*/1"))
 		addErr(router.AddGet("/2/*/:"))
 		addErr(router.AddGet("/2/*/*"))
-		// 打印
+		// print
 		testPrintRoute(&router.route[methodGet], []string{}, t)
 	}
-	// match
+	// Test match
 	{
-		// 静态路由
+		// Static
 		router.AddGet("/4/5/6", handler.Handle1)
 		testHttpGet("/4/5/6", &handler, &router)
-		if len(handler.funcs) != 2 || handler.funcs[0] != "Interceptor" || handler.funcs[1] != "Handle1" {
+		if len(handler.funcs) != 2 || handler.funcs[0] != "Intercept" || handler.funcs[1] != "Handle1" {
 			t.FailNow()
 		}
 		testHttpGet("/4/5/5", &handler, &router)
-		if len(handler.funcs) != 2 || handler.funcs[0] != "Interceptor" || handler.funcs[1] != "NotMatch" {
+		if len(handler.funcs) != 2 || handler.funcs[0] != "Intercept" || handler.funcs[1] != "NotMatch" {
 			t.FailNow()
 		}
-		// 参数路由
+		// Param
 		router.AddGet("/3/:/5/:/*", handler.Handle1, handler.Handle2)
 		testHttpGet("/3/4/5/6/7/8", &handler, &router)
-		if len(handler.funcs) != 3 || handler.funcs[0] != "Interceptor" || handler.funcs[1] != "Handle1" || handler.funcs[2] != "Handle2" {
+		if len(handler.funcs) != 3 || handler.funcs[0] != "Intercept" || handler.funcs[1] != "Handle1" || handler.funcs[2] != "Handle2" {
 			t.FailNow()
 		}
 		if len(handler.param) != 3 || handler.param[0] != "4" || handler.param[1] != "6" || handler.param[2] != "7/8" {
 			t.FailNow()
 		}
-		// 匹配参数不完整
+		// No match
 		testHttpGet("/2/3/4/5", &handler, &router)
-		if len(handler.funcs) != 2 || handler.funcs[0] != "Interceptor" || handler.funcs[1] != "NotMatch" {
+		if len(handler.funcs) != 2 || handler.funcs[0] != "Intercept" || handler.funcs[1] != "NotMatch" {
 			t.FailNow()
 		}
 	}
@@ -219,29 +207,29 @@ func Test_Router_Remove(t *testing.T) {
 	var handler testHandler
 	var router MethodRouter
 	router.NotMatch = append(router.NotMatch, handler.NotMatch)
-	// 添加路由
+	// Add
 	router.AddGet("/1", handler.Handle1)
 	router.AddGet("/1/:", handler.Handle2)
 	router.AddGet("/1/:/3", handler.Handle2)
-	// 删除错误的路由
+	// Remove a non existent route。
 	if router.RemoveGet("/12") {
 		t.FailNow()
 	}
-	// 删除路由
+	// Remove
 	if !router.RemoveGet("/1/:") {
 		t.FailNow()
 	}
-	// 测试请求删除的路由
+	// Test match removed route.
 	testHttpGet("/1/2", &handler, &router)
 	if len(handler.funcs) != 1 && handler.funcs[0] != "NotFound" {
 		t.FailNow()
 	}
-	// 测试请求删除的路由的子路由
+	// Test match removed route's sub route.
 	testHttpGet("/1/2/3", &handler, &router)
 	if len(handler.funcs) != 1 && handler.funcs[0] != "NotFound" {
 		t.FailNow()
 	}
-	// 测试路由
+	// Test match parent.
 	testHttpGet("/1", &handler, &router)
 	if len(handler.funcs) != 1 && handler.funcs[0] != "Handle1" {
 		t.FailNow()
@@ -251,26 +239,26 @@ func Test_Router_Remove(t *testing.T) {
 func Test_Router_AddStatic(t *testing.T) {
 	var handler testHandler
 	var router MethodRouter
-	router.Interceptor = append(router.Interceptor, handler.Interceptor)
+	router.Intercept = append(router.Intercept, handler.Intercept)
 	router.NotMatch = append(router.NotMatch, handler.NotMatch)
-	// 随机生成文件数据
+	// Generate random file data.
 	random := rand.New(rand.NewSource(time.Now().Unix()))
 	fileData := make([]byte, random.Int31n(102400))
 	random.Read(fileData)
-	// 生成本地文件用于测试
+	// Create dir.
 	dirName := "test.dir"
 	testFatalError(t, os.MkdirAll(dirName, os.ModePerm))
-	// 测试完成后删除整个目录
+	// Delete dir.
 	defer os.RemoveAll(dirName)
-	// 写入文件
+	// Create files.
 	testFatalError(t, ioutil.WriteFile(filepath.Join(dirName, "test.html"), fileData, os.ModePerm))
 	testFatalError(t, ioutil.WriteFile(filepath.Join(dirName, "test.css"), fileData, os.ModePerm))
 	testFatalError(t, ioutil.WriteFile(filepath.Join(dirName, "test.js"), fileData, os.ModePerm))
-	// 路由，加载目录，缓存
+	// Add static file.
 	testFatalError(t, router.AddStatic(http.MethodGet, "/static", dirName, true))
-	// 路由，加载目录，不缓存
+	// Add cache file.
 	testFatalError(t, router.AddStatic(http.MethodGet, "/cache", dirName, false))
-	// 测试
+	// html
 	testHttpGet("/static/test.html", &handler, &router)
 	if !strings.Contains(handler.header.Get("Content-Type"), mime.TypeByExtension("html")) {
 		t.FailNow()
@@ -279,7 +267,7 @@ func Test_Router_AddStatic(t *testing.T) {
 	if !strings.Contains(handler.header.Get("Content-Type"), mime.TypeByExtension("html")) {
 		t.FailNow()
 	}
-	//
+	// css
 	testHttpGet("/static/test.css", &handler, &router)
 	if !strings.Contains(handler.header.Get("Content-Type"), mime.TypeByExtension("css")) {
 		t.FailNow()
@@ -300,7 +288,8 @@ func Test_Router_AddStatic(t *testing.T) {
 }
 
 type testBenchmark struct {
-	benchRouteCount                  int // 路径层级
+	// How many levels of directory.
+	benchRouteCount                  int
 	staticRoute, staticUrl           strings.Builder
 	paramRoute, paramUrl             [3]strings.Builder
 	staticParamRoute, staticParamUrl [3]strings.Builder
@@ -312,24 +301,24 @@ type testBenchmark struct {
 
 func (t *testBenchmark) Init() {
 	t.benchRouteCount = 10
-	// 全静态根目录
+	// /static1.../static_n
 	t.staticRoute.WriteString("/static")
 	t.staticUrl.WriteString("/static")
-	// 全参数根目录
+	// /param1.../param_n
 	t.paramRoute[0].WriteString("/param")
 	t.paramUrl[0].WriteString("/param")
 	t.paramRoute[1].WriteString("/param")
 	t.paramUrl[1].WriteString("/param")
 	t.paramRoute[2].WriteString("/param")
 	t.paramUrl[2].WriteString("/param")
-	// 一半静态一半参数根目录
+	// /static1/param1.../static_n/param_n
 	t.staticParamRoute[0].WriteString("/static_param")
 	t.staticParamUrl[0].WriteString("/static_param")
 	t.staticParamRoute[1].WriteString("/static_param")
 	t.staticParamUrl[1].WriteString("/static_param")
 	t.staticParamRoute[2].WriteString("/static_param")
 	t.staticParamUrl[2].WriteString("/static_param")
-	// 一半参数一半静态根目录
+	// /param1/static1.../param_n/static_n
 	t.paramStaticRoute[0].WriteString("/param_static")
 	t.paramStaticUrl[0].WriteString("/param_static")
 	t.paramStaticRoute[1].WriteString("/param_static")
@@ -337,24 +326,24 @@ func (t *testBenchmark) Init() {
 	t.paramStaticRoute[2].WriteString("/param_static")
 	t.paramStaticUrl[2].WriteString("/param_static")
 	for i := 0; i < t.benchRouteCount; i++ {
-		// 全静态
+		// /static1.../static_n
 		t.staticRoute.WriteString(fmt.Sprintf("/static%d", i))
 		t.staticUrl.WriteString(fmt.Sprintf("/static%d", i))
-		// 全参数
+		// /param1.../param_n
 		t.paramRoute[0].WriteString("/:")
 		t.paramUrl[0].WriteString(fmt.Sprintf("/param%d", i))
 		t.paramRoute[1].WriteString(fmt.Sprintf("/:param%d", i))
 		t.paramUrl[1].WriteString(fmt.Sprintf("/param%d", i))
 		t.paramRoute[2].WriteString(fmt.Sprintf("/:param%d", i))
 		t.paramUrl[2].WriteString(fmt.Sprintf("/param%d", i))
-		// 一半静态一半参数根目录
+		// /static1/param1.../static_n/param_n
 		t.staticParamRoute[0].WriteString(fmt.Sprintf("/static%d/:", i))
 		t.staticParamUrl[0].WriteString(fmt.Sprintf("/static%d/param%d", i, i))
 		t.staticParamRoute[1].WriteString(fmt.Sprintf("/static%d/:param%d", i, i))
 		t.staticParamUrl[1].WriteString(fmt.Sprintf("/static%d/param%d", i, i))
 		t.staticParamRoute[2].WriteString(fmt.Sprintf("/static%d/:param%d", i, i))
 		t.staticParamUrl[2].WriteString(fmt.Sprintf("/static%d/param%d", i, i))
-		// 一半参数一半静态根目录
+		// /param1/static1.../param_n/static_n
 		t.paramStaticRoute[0].WriteString(fmt.Sprintf("/:/static%d", i))
 		t.paramStaticUrl[0].WriteString(fmt.Sprintf("/param%d/static%d", i, i))
 		t.paramStaticRoute[1].WriteString(fmt.Sprintf("/:param%d/static%d", i, i))
@@ -401,7 +390,7 @@ func (t *testBenchmark) benchmark(b *testing.B, url string, r http.Handler) {
 	}
 }
 
-// 测试benchmark是否都能匹配到
+// Test match
 func Test_Benchmark(t *testing.T) {
 	var handler testHandler
 	testBench := testNewBenchmark()

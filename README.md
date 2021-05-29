@@ -1,48 +1,48 @@
-# router
+# http-router
 
-基于标准库http.Handler接口实现的路由。
+A http router written in GO。
 
-## 两种路由
+## Routers
 
-- MethodRouter，匹配http method和url的路由，用于api服务开发。
-- PathRouter，只匹配url的路由，不关心http method，可以用于api代理网关开发。
+- MethodRouter, match http method and url, can be used for web application development.
+- PathRouter, only match url, can be used for gateway proxy development.
 
-## 注册路由
-- 参数路由，使用":"表示，例："/users/:"。参数路由不需要命名，因为知道顺序即可。
-- 全匹配路由，使用"*"表示，例："/users/*"。全匹配路由后面，不能继续添加子路由，否则返回错误。
-- 静态路由，例："/users"。
+## Route path
+- Param "/:", no need to know name, because we know the order.
+- All match "/*", add any path after this route will return error.
+- Static "/users".
 
 注意，同一层的路由，只能有一种类型。比如，已有路由"/users/:int"，继续添加"/users/:float"或者"/users/root"会返回错误。
 
 虽然同时提供了添加和删除路由的功能，但是不是同步的，在并发的时候修改路由，可能会造成匹配错误或者失败。
 
-## 使用路由
+## Useage
 
-api服务，添加一个路由"post /users"，处理添加用户的请求。
+Handle user register.
 
-```golang
+```go
 var router MethodRouter
 _, err := router.AddPost("/users", handlePostUsers)
 if err != nil{
   panic(err)
 }
 ```
-api服务，添加一个路由"get /"处理主页，预先加载缓存程序目录下的单页面静态文件"index.html"。
+Handle static file.
 
-```golang
+```go
 var router MethodRouter
 _, err := router.AddStatic(http.MethodGet, "./index.html", "/", true)
 if err != nil{
   panic(err)
 }
-// 使用FileHandler
+// Use FileHandler
 var fileHandler FileHandler
 fileHandler.File = "./index.html"
 _, err = router.AddGet("/", fileHandler.Handle)
 if err != nil{
   panic(err)
 }
-// 使用CacheHandler
+// Use CacheHandler
 data, err := ioutil.ReadFile("./index.html")
 if err != nil {
   panic(err)
@@ -57,9 +57,9 @@ if err != nil{
 }
 ```
 
-api服务，添加一个路由"get /"处理程序目录"html"下的所有文件。
+Add all files of a directory, remove file extension.
 
-```golang
+```go
 var router MethodRouter
 _, err := router.AddStatic(http.MethodGet, "./html", "/", true, "html")
 if err != nil{
@@ -67,9 +67,9 @@ if err != nil{
 }
 ```
 
-api网关，添加一个路由"/user"，处理用户微服务代理转发。
+Api gateway.
 
-```golang
+```go
 var router PathRouter
 _, err := router.Add("/user", handleForwardUser)
 if err != nil{
@@ -77,50 +77,50 @@ if err != nil{
 }
 ```
 
-获取已知路由"/index.html"，重新设置HandleFunc。这个在多路径指向一个资源时有用。
+Reset handler chain.
 
-```golang
+```go
 var router MethodRouter
-// 处理静态缓存文件
+// Static file.
 _, err := router.AddStatic(http.MethodGet, "./index.html", "/index.html", true)
 if err != nil{
   panic(err)
 }
-// route.Handle是一个CacheHandler
+// route.Handle is a CacheHandler.
 route := router.RouteGet("index.html")
 if route == nil{
-  panic("这个开发包出bug了！")
+  panic("bug")
 }
-// 共用这个CacheHandler，这样，路由"/index.html"和"/"使用了同一份缓存
+// Share this CacheHandler, so that route("/index.html") and route("/") can use same cache.
 _, err = router.AddGet("/", route.Handle...)
 if err != nil{
   panic(err)
 }
 ```
 
-删除已知路由"/users"，暂时还想不到使用的场景
+Remove route, but it may never be used in the actual scene.
 
-```golang
+```go
 var router PathRouter
 _, err := router.Add("/users", handleForwardUser)
 if err != nil{
   panic(err)
 }
 if !router.Remove("/users"){
-  panic("这个开发包出bug了！")
+  panic("bug")
 }
 ```
 
-详细的操作，代码有注释，也可以参考router_test.go中的代码。
+## Benchmark
 
-## 测试
+Compared with the popular framework beego and gin. 
 
-my与beego和gin框架的路由benchmark比较，四种路由，共10层目录。router_test.go的注释掉了gin和beego的benchmark相关的代码，因为它们引用了好多其他的包。。。
+In router_test.go file, beego and gin's code has been commented out because they import too many packages.
 
-- 全静态，/static0.../static9
-- 全参数，/param0.../param9
-- 半静态半参数，/static0/param0.../static9/param9
-- 半参数半静态，/static0/param0.../static9/param9
+- /static0.../static9
+- /param0.../param9
+- /static0/param0.../static9/param9
+- /static0/param0.../static9/param9
 
 ```golang
 goos: darwin
