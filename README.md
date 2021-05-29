@@ -12,9 +12,9 @@ A http router written in GO。
 - All match "/*", add any path after this route will return error.
 - Static "/users".
 
-注意，同一层的路由，只能有一种类型。比如，已有路由"/users/:int"，继续添加"/users/:float"或者"/users/root"会返回错误。
+Not that, if there is a route "/users/:int", add"/users/:float" or "/users/root" will return error.
 
-虽然同时提供了添加和删除路由的功能，但是不是同步的，在并发的时候修改路由，可能会造成匹配错误或者失败。
+Routers are not concurrent secure.
 
 ## Useage
 
