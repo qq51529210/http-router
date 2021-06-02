@@ -2,115 +2,89 @@
 
 A http router written in GO。
 
-## Routers
-
-- MethodRouter, match http method and url, can be used for web application development.
-- PathRouter, only match url, can be used for gateway proxy development.
-
 ## Route path
-- Param "/:", no need to know name, because we know the order.
-- All match "/*", add any path after this route will return error.
+- Param "/users/:", add"/users/*" or "/users/root" will return error. 
+- All match "/users/\*", add"/users/any_path" will return error. 
 - Static "/users".
-
-Not that, if there is a route "/users/:int", add"/users/:float" or "/users/root" will return error.
-
-Routers are not concurrent secure.
 
 ## Useage
 
-Handle user register.
-
 ```go
-var router MethodRouter
-_, err := router.AddPost("/users", handlePostUsers)
+var router Router
+var route *Route
+var err error
+// Add a route and handler.
+route, err := router.Add(http.MethodGet, "/users", handleGetUsers)
+if err != nil {
+  panic(err)
+}
+route, err = router.AddGet("/users/:", handleGetUser)
+if err != nil {
+  panic(err)
+}
+route, err = router.AddPost("/goods", handlePostGoods)
+if err != nil {
+  panic(err)
+}
+// Find route.
+route = router.Route("/users")
+if route == nil {
+  panic("bug")
+}
+// Note! Because '/' is root of 'u' and 'g', so it can be found!
+route = router.Route("/")
+if route == nil {
+  panic("bug")
+}
+// Remove route, it may never be used.
+if !router.Remove("/users/:") {
+  panic("bug")
+}
+// Route not found return false.
+if router.Remove("/bills") {
+  panic("bug")
+}
+// Add static file and cache it.
+err = router.AddStatic(http.MethodGet, "/", "index.html", true)
 if err != nil{
   panic(err)
 }
-```
-Handle static file.
-
-```go
-var router MethodRouter
-_, err := router.AddStatic(http.MethodGet, "./index.html", "/", true)
+// Share cache by set handler.
+route = router.Route("/")
+if route == nil {
+  panic("bug")
+}
+// Path /index and / use one handler.
+_, err = router.AddGet("/index", route.Handle...)
 if err != nil{
   panic(err)
 }
-// Use FileHandler
+// FileHandler
 var fileHandler FileHandler
-fileHandler.File = "./index.html"
-_, err = router.AddGet("/", fileHandler.Handle)
+fileHandler.File = "/index.css"
+_, err = router.AddGet("/index.css", fileHandler.Handle)
 if err != nil{
   panic(err)
 }
-// Use CacheHandler
-data, err := ioutil.ReadFile("./index.html")
+// CacheHandler
+data, err := ioutil.ReadFile("index.js")
 if err != nil {
   panic(err)
 }
 var cacheHandler CacheHandler
-cacheHandler.ContentType = mime.TypeByExtension("html")
+cacheHandler.ContentType = mime.TypeByExtension("js")
 cacheHandler.ModTime = time.Now()
 cacheHandler.Data = data
-_, err = router.AddGet("/", cacheHandler.Handle)
+_, err = router.AddGet("/index.js", cacheHandler.Handle)
+if err != nil{
+  panic(err)
+}
+// Add all files of directory, remove html file extension.
+_, err = router.AddStatic(http.MethodGet, "/", "html", false, "html")
 if err != nil{
   panic(err)
 }
 ```
-
-Add all files of a directory, remove file extension.
-
-```go
-var router MethodRouter
-_, err := router.AddStatic(http.MethodGet, "./html", "/", true, "html")
-if err != nil{
-  panic(err)
-}
-```
-
-Api gateway.
-
-```go
-var router PathRouter
-_, err := router.Add("/user", handleForwardUser)
-if err != nil{
-  panic(err)
-}
-```
-
-Reset handler chain.
-
-```go
-var router MethodRouter
-// Static file.
-_, err := router.AddStatic(http.MethodGet, "./index.html", "/index.html", true)
-if err != nil{
-  panic(err)
-}
-// route.Handle is a CacheHandler.
-route := router.RouteGet("index.html")
-if route == nil{
-  panic("bug")
-}
-// Share this CacheHandler, so that route("/index.html") and route("/") can use same cache.
-_, err = router.AddGet("/", route.Handle...)
-if err != nil{
-  panic(err)
-}
-```
-
-Remove route, but it may never be used in the actual scene.
-
-```go
-var router PathRouter
-_, err := router.Add("/users", handleForwardUser)
-if err != nil{
-  panic(err)
-}
-if !router.Remove("/users"){
-  panic("bug")
-}
-```
-
 ## Benchmark
 
 Compared with the popular framework beego and gin. 
@@ -125,7 +99,7 @@ In router_test.go file, beego and gin's code has been commented out because they
 ```golang
 goos: darwin
 goarch: amd64
-pkg: github.com/qq51529210/web/router
+pkg: github.com/qq51529210/http-router
 Benchmark_Match_My_Static-4             23759918                46.1 ns/op             0 B/op          0 allocs/op
 Benchmark_Match_Gin_Static-4            18812461                65.2 ns/op             0 B/op          0 allocs/op
 Benchmark_Match_Beego_Static-4            377347              3183 ns/op             992 B/op          9 allocs/op

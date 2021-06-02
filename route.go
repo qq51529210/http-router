@@ -73,7 +73,7 @@ func splitRoute(_path string) ([]string, error) {
 	return routePath, nil
 }
 
-// A node of a tree.
+// A route of a route tree.
 type Route struct {
 	Handle []HandleFunc
 	// Use for remove sub route.
@@ -89,21 +89,149 @@ type Route struct {
 	param *Route
 }
 
-// Try to add path to route, return final route or error.
-func (r *Route) add(path string) (*Route, error) {
+func (r *Route) add(name string) *Route {
+	sub := new(Route)
+	sub.name = name
+	sub.parent = r
+	if r.name == "*" || r.name == ":" {
+		sub.path = r.path + "/" + name
+	} else {
+		sub.path = r.path + name
+	}
+	return sub
+}
+
+// Try to add a param sub route to r, it returns error in these cases:
+// name is no equal to r's name and r has static sub route.
+func (r *Route) addSubParam(name string) (*Route, error) {
+	// Case 1, r has a param sub route, name must equal to this sub route's name.
+	if r.param != nil {
+		if r.param.name != name {
+			return nil, fmt.Errorf("%s has a param sub route %s, add sub route %s failed", r.path, r.param.name, name)
+		}
+		return r.param, nil
+	}
+	// Case 2, r has static sub route.
+	for i := 0; i < len(r.static); i++ {
+		if r.static[i] != nil {
+			return nil, fmt.Errorf("%s has a static sub route %s, add sub route %s failed", r.path, r.static[i].name, name)
+		}
+	}
+	// Add param sub route.
+	r.param = r.add(name)
+	return r.param, nil
+}
+
+// Try to add a static sub route to r, return error if r is a all match route or r has a param route.
+func (r *Route) addSubStatic(name string) (*Route, error) {
+	// r has a param route.
+	if r.param != nil {
+		return nil, fmt.Errorf("%s has a param sub route %s, add sub route %s failed", r.path, r.param.name, name)
+	}
+	// Let sub route to handle.
+	if r.static[name[0]] != nil {
+		return r.static[name[0]].addStatic(name)
+	}
+	r.static[name[0]] = r.add(name)
+	return r.static[name[0]], nil
+}
+
+// Try to add a static path to r, it returns error if r has a param route.
+func (r *Route) addStatic(name string) (*Route, error) {
+	// r is a param route.
+	if r.name == ":" {
+		return r.addSubStatic(name)
+	}
+	// Add case 1, r.name="/abc", name="/abc".
+	if r.name == name {
+		return r, nil
+	}
+	diff1, diff2 := diffString(r.name, name)
+	// Add case 2, r.name="/abc", name="/ab", diff1="c", diff2="".
+	// New: /ab(name) -> c(r).
+	if diff2 == "" {
+		err := r.moveToNewSub(diff1)
+		if err != nil {
+			return nil, err
+		}
+		// Return "/ab".
+		return r, nil
+	}
+	// Add case 3, r.name="/ab", name="/abc", diff1="", diff2="c".
+	// New: /ab(r) -> c(name).
+	if diff1 == "" {
+		if r.static[diff2[0]] != nil {
+			return r.static[diff2[0]].addStatic(diff2)
+		}
+		r.static[diff2[0]] = r.add(diff2)
+		return r.static[diff2[0]], nil
+	}
+	// Add case 4, r.name="/abc", name="/abd", diff1="c", diff2="d".
+	//  		-> c(r).
+	// New: /ab
+	// 			-> d(name).
+	err := r.moveToNewSub(diff1)
+	if err != nil {
+		return nil, err
+	}
+	// Return "d".
+	return r.addSubStatic(diff2)
+}
+
+// Add a new sub route, copy r's data to new route.
+func (r *Route) moveToNewSub(name string) error {
+	// Save r's data.
+	handle := r.Handle
+	staic := r.static
+	param := r.param
+	// Modify r's data.
+	r.path = r.path[:len(r.path)-len(name)]
+	r.name = r.name[:len(r.name)-len(name)]
+	r.Handle = nil
+	r.removeAllStatic()
+	r.param = nil
+	// Add a new static route.
+	sub, err := r.addSubStatic(name)
+	if err != nil {
+		return err
+	}
+	sub.Handle = handle
+	sub.static = staic
+	sub.param = param
+	return nil
+}
+
+func (r *Route) removeAllStatic() {
+	for i := 0; i < len(r.static); i++ {
+		r.static[i] = nil
+	}
+}
+
+// Root route of a route tree.
+type rootRoute struct {
+	route Route
+}
+
+// Try to add a route by path.
+func (r *rootRoute) Add(path string) (*Route, error) {
+	// Split path into static and param routes.
 	routePath, err := splitRoute(path)
 	if err != nil {
 		return nil, err
 	}
-	// Initial current route.
-	if r.name == "" {
-		r.name = routePath[0]
-		r.path = r.name
+	route := &r.route
+	// Initialize root route.
+	if route.name == "" {
+		route.name = routePath[0]
+		route.path = route.name
 		routePath = routePath[1:]
 	}
-	route := r
 	// Add sub route loop.
 	for _, name := range routePath {
+		// Route is a all match route, can not add sub route.
+		if route.name == "*" {
+			return nil, fmt.Errorf("%s is a all match route, add sub route %s failed", route.path, name)
+		}
 		if name == ":" || name == "*" {
 			route, err = route.addSubParam(name)
 		} else {
@@ -116,152 +244,67 @@ func (r *Route) add(path string) (*Route, error) {
 	return route, nil
 }
 
-// Try to add a param sub route, return error if r is a all match route,
-// or name is no equal to r, or r has static sub route.
-func (r *Route) addSubParam(name string) (*Route, error) {
-	// r is a all match route.
-	if r.name == "*" {
-		return nil, fmt.Errorf("can't add '%s' to '%s'", name, r.path)
-	}
-	// r has a param sub route.
-	if r.param != nil {
-		if r.param.name != name {
-			return nil, fmt.Errorf("can't add '%s' to '%s' has sub param '%s'", name, r.path, r.param.name)
-		}
-		return r.param, nil
-	}
-	// r has static sub route.
-	for i := 0; i < len(r.static); i++ {
-		if r.static[i] != nil {
-			return nil, fmt.Errorf("can't add '%s' to '%s' has sub static '%s'", name, r.path, r.static[i].name)
-		}
-	}
-	route := new(Route)
-	route.name = name
-	route.parent = r
-	if r.name[0] == '*' || r.name[0] == ':' {
-		route.path = r.path + "/" + name
-	} else {
-		route.path = r.path + name
-	}
-	r.param = route
-	return route, nil
-}
-
-// Try to add static sub route, return error if r is a all match route or r has a param route.
-func (r *Route) addSubStatic(name string) (*Route, error) {
-	// r is a all match route.
-	if r.name == "*" {
-		return nil, fmt.Errorf("can't add '%s' to '%s'", name, r.path)
-	}
-	// r has a param sub route.
-	if r.param != nil {
-		return nil, fmt.Errorf("can't add '%s' to '%s' has sub param '%s'", name, r.path, r.param.name)
-	}
-	// Let sub route to handle.
-	// Example: r=“abc123" add "abc456", let sub route 'a' to handle "abc456".
-	if r.static[name[0]] != nil {
-		return r.static[name[0]].addStatic(name)
-	}
-	// Add
-	sub := new(Route)
-	sub.name = name
-	sub.parent = r
-	if r.name == ":" {
-		sub.path = r.path + "/" + sub.name
-	} else {
-		sub.path = r.path + sub.name
-	}
-	r.static[name[0]] = sub
-	return sub, nil
-}
-
-// Try to add static path route.
-func (r *Route) addStatic(name string) (*Route, error) {
-	if r.name == "*" {
-		return nil, fmt.Errorf("can't add '%s' to '%s'", name, r.path)
-	}
-	// case 1, r="/abc", name="/abc"
-	if r.name == name {
-		return r, nil
-	}
-	// r is a param route.
-	if r.name[0] == ':' {
-		return r.addSubStatic(name)
-	}
-	diff1, diff2 := diffString(r.name, name)
-	// case 2, r="/abc123", name="/abc", diff1="123", diff2="", same="/abc".
-	// "/abc123"(r) -> "/abc"(new route)
-	// 				      |
-	//				    "123"(r)
-	if diff2 == "" {
-		r.path = r.path[:len(r.path)-len(diff1)]
-		r.name = r.name[:len(r.name)-len(diff1)]
-		// r route become "/abc", copy r's data to “123”.
-		handle := r.Handle
-		staic := r.static
-		param := r.param
-		r.Handle = nil
-		r.removeAllStatic()
-		r.param = nil
-		// Add sub "123", copy r's data.
-		sub, err := r.addSubStatic(diff1)
-		if err != nil {
-			return nil, err
-		}
-		sub.Handle = handle
-		sub.static = staic
-		sub.param = param
-		// Return "/abc"
-		return r, nil
-	}
-	// case 3, r="/abc", name="/abc123", diff1="", diff2="123", same="/abc"
-	// "/abc"(r) -> "/abc"(r)
-	// 				   |
-	//				 "123"(new route)
-	if diff1 == "" {
-		return r.addSubStatic(diff2)
-	}
-	// case 4, r="/abc456", name="/abc123", diff1="456", diff2="123", same="/abc"
-	// "/abc456"(r) -> "/abc"
-	// 				    /   \
-	//			    "123"   "456"
-	// 			    (new)	 (r)
-	r.path = r.path[:len(r.path)-len(diff1)]
-	r.name = r.name[:len(r.name)-len(diff1)]
-	// r route become "/abc", copy r's data to “456”.
-	handle := r.Handle
-	staic := r.static
-	param := r.param
-	r.Handle = nil
-	r.removeAllStatic()
-	r.param = nil
-	// Add sub "456", copy r's data.
-	sub, err := r.addSubStatic(diff1)
+// Try to find route by path.
+func (r *rootRoute) Find(path string) *Route {
+	// Split path into static and param routes.
+	routePath, err := splitRoute(path)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	sub.Handle = handle
-	sub.static = staic
-	sub.param = param
-	// Return "123"
-	return r.addSubStatic(diff2)
+	// Root
+	route := &r.route
+	name := routePath[0]
+	// r must be static route.
+	for {
+		if route == nil || len(route.name) > len(name) || route.name != name[:len(route.name)] {
+			return nil
+		}
+		name = name[len(route.name):]
+		if name == "" {
+			break
+		}
+		route = route.static[name[0]]
+	}
+	routePath = routePath[1:]
+	// Check sub.
+	for _, name := range routePath {
+		if name[0] == '*' || name[0] == ':' {
+			route = route.param
+			if route == nil || route.name != name {
+				return nil
+			}
+			continue
+		}
+		for {
+			route = route.static[name[0]]
+			if route == nil || len(route.name) > len(name) || route.name != name[:len(route.name)] {
+				return nil
+			}
+			name = name[len(route.name):]
+			if name == "" {
+				break
+			}
+		}
+	}
+	return route
 }
 
-// Try to remove route path.
-func (r *Route) remove(path string) bool {
-	route := r.get(path)
+// Try to remove route by path.
+// If success, it will go on remove the route's parent if its parent has no sub route and no handlers.
+func (r *rootRoute) Remove(path string) bool {
+	// Find the route.
+	route := r.Find(path)
 	if route == nil {
 		return false
 	}
 	for {
-		// Is r
-		if route == r {
-			r.path = ""
-			r.Handle = nil
-			r.name = ""
-			r.removeAllStatic()
-			r.param = nil
+		// Reset root route.
+		if route == &r.route {
+			route.path = ""
+			route.Handle = nil
+			route.name = ""
+			route.removeAllStatic()
+			route.param = nil
 			return true
 		}
 		// Remove from it's parent route.
@@ -310,55 +353,11 @@ func (r *Route) remove(path string) bool {
 	}
 }
 
-// Try to find sub route by path.
-func (r *Route) get(path string) *Route {
-	routePath, err := splitRoute(path)
-	if err != nil {
-		return nil
-	}
-	// Root
-	route := r
-	name := routePath[0]
-	// r must be static route.
-	for {
-		if route == nil || len(route.name) > len(name) || route.name != name[:len(route.name)] {
-			return nil
-		}
-		name = name[len(route.name):]
-		if name == "" {
-			break
-		}
-		route = route.static[name[0]]
-	}
-	routePath = routePath[1:]
-	// Check sub.
-	for _, name := range routePath {
-		if name[0] == '*' || name[0] == ':' {
-			route = route.param
-			if route == nil || route.name != name {
-				return nil
-			}
-			continue
-		}
-		for {
-			route = route.static[name[0]]
-			if route == nil || len(route.name) > len(name) || route.name != name[:len(route.name)] {
-				return nil
-			}
-			name = name[len(route.name):]
-			if name == "" {
-				break
-			}
-		}
-	}
-	return route
-}
-
-// Try to match url path, return the final route or nil.
-// param route name will be appended to c.Param.
-func (r *Route) match(c *Context) *Route {
+// Try to match path, return the final route and value of param route.
+// Value of param route will append to param and return.
+func (r *rootRoute) Match(c *Context) *Route {
 	path := c.Req.URL.Path
-	route := r
+	route := &r.route
 	i := 0
 Loop:
 	for {
@@ -373,7 +372,7 @@ Loop:
 				// If sub route is a param route.
 				for route.param != nil {
 					// Is a param route.
-					if route.param.name[0] == ':' {
+					if route.param.name == ":" {
 						i = 1
 						// Find next '/'
 						for ; i < len(path); i++ {
@@ -385,6 +384,10 @@ Loop:
 								continue ParamLoop
 							}
 						}
+						// Can not find '/', it's the end.
+						c.Param = append(c.Param, path)
+						route = route.param
+						return route
 					}
 					// Is a all match route.
 					c.Param = append(c.Param, path)
@@ -405,12 +408,5 @@ Loop:
 		}
 		// Current route dose not match the rest of path.
 		return nil
-	}
-}
-
-// Remove all static sub routes.
-func (r *Route) removeAllStatic() {
-	for i := 0; i < len(r.static); i++ {
-		r.static[i] = nil
 	}
 }

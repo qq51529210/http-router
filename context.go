@@ -111,7 +111,44 @@ type Context struct {
 	// The values of the parameter route, in the order of registration.
 	Param []string
 	// Keep user data in the handler chain.
+	// func handle1(c*Context){
+	// 	c.Data = sessionPool.Get()
+	// 	c.Next()
+	// 	sessionPool.Put(c.Data)
+	// }
+	// func handle2(c*Context){
+	// 	handleSession(c.Data)
+	// }
 	Data interface{}
+	// Index of Handler chain.
+	index int
+	// Handler chain.
+	handle []HandleFunc
+	// Abort handler chain.
+	abort bool
+}
+
+// Call next handle function in the chain.
+// func handle1(c*Context){
+// 	c.Next() -> call handle2.
+// }
+func (c *Context) Next() {
+	c.index++
+	if c.index >= len(c.handle) {
+		return
+	}
+	c.handle[c.index](c)
+}
+
+// Abort handler chain and exit ServeHTTP().
+// Only work before match, after intercept.
+// The call process: intercept -> abort -> match.
+// func intercept1(c*Context){
+// 	c.Abort() -> exit ServeHTTP() after intercept1.
+// }
+func (c *Context) Abort() {
+	c.abort = true
+	c.index = len(c.handle)
 }
 
 // Set Content-Type and statusCode, convert data to JSON and write to body,

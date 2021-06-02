@@ -11,113 +11,120 @@ import (
 	"strings"
 )
 
-const (
-	methodGet = iota
-	methodHead
-	methodPost
-	methodPut
-	methodPatch
-	methodDelete
-	methodConnect
-	methodOptions
-	methodTrace
-	methodMax
-)
+type HandleFunc func(*Context)
 
-// Match http method and url, useful for web application.
+// Match http method and url.
 // Route path example:
-// Param route "/:", no need to know name, because we know the order.
-// All match route "/*", add any path after this route will return error.
-// Static route "/users".
-type MethodRouter struct {
+// Param route: "/:", no need to know name, because we know the order.
+// All match route: "/*", add any path after this route will return error.
+// Static route: "/users".
+type Router struct {
 	// Route table.
-	route [methodMax]Route
+	getRoot     rootRoute
+	headRoot    rootRoute
+	postRoot    rootRoute
+	putRoot     rootRoute
+	patchRoot   rootRoute
+	deleteRoot  rootRoute
+	connectRoot rootRoute
+	optionsRoot rootRoute
+	traceRoot   rootRoute
 	// Intercept chain before match route.
-	Intercept []HandleFunc
-	// NotMatch chain if match route failed.
-	NotMatch []HandleFunc
+	intercept []HandleFunc
+	// notfound chain if match route failed.
+	notfound []HandleFunc
+}
+
+func (r *Router) SetIntercept(handleFunc ...HandleFunc) {
+	r.intercept = handleFunc
+}
+
+func (r *Router) SetNotfound(handleFunc ...HandleFunc) {
+	r.notfound = handleFunc
 }
 
 // Implements http.Handler
-func (r *MethodRouter) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	c := contextPool.Get().(*Context)
 	c.Req = req
 	c.Res = res
 	c.Param = c.Param[:0]
 	c.Data = nil
+	c.handle = r.intercept
+	c.index = -1
 	// Intercept chain.
-	for i := 0; i < len(r.Intercept); i++ {
-		if !r.Intercept[i](c) {
-			contextPool.Put(c)
-			return
-		}
+	c.Next()
+	if c.abort {
+		contextPool.Put(c)
+		return
 	}
 	// Try to match route.
-	route := r.root(req.Method)
-	if route != nil {
-		route = route.match(c)
-		if route != nil && len(route.Handle) > 0 {
-			for _, h := range route.Handle {
-				if !h(c) {
-					break
-				}
-			}
+	rootRoute := r.root(req.Method)
+	if rootRoute != nil {
+		route := rootRoute.Match(c)
+		if route != nil {
+			c.handle = route.Handle
+			c.index = -1
+			c.Next()
 			contextPool.Put(c)
 			return
 		}
 	}
 	// No match.
-	for i := 0; i < len(r.NotMatch); i++ {
-		if !r.NotMatch[i](c) {
-			break
-		}
-	}
+	c.handle = r.notfound
+	c.index = -1
+	c.Next()
 	contextPool.Put(c)
 }
 
 // Try to add a route.
-func (r *MethodRouter) Add(method, path string, handleFunc ...HandleFunc) (*Route, error) {
+func (r *Router) Add(method, path string, handleFunc ...HandleFunc) (*Route, error) {
 	root := r.root(method)
 	if root == nil {
 		return nil, fmt.Errorf("invalid http method '%s'", method)
 	}
-	return r.add(root, path, handleFunc...)
+	route, err := root.Add(path)
+	if err != nil {
+		return nil, err
+	}
+	route.Handle = handleFunc
+	return route, nil
 }
 
-func (r *MethodRouter) AddGet(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodGet], path, handleFunc...)
+func (r *Router) AddGet(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodGet, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddHead(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodHead], path, handleFunc...)
+func (r *Router) AddHead(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodHead, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddPost(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodPost], path, handleFunc...)
+func (r *Router) AddPost(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodPost, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddPut(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodPut], path, handleFunc...)
+func (r *Router) AddPut(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodPut, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddPatch(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodPatch], path, handleFunc...)
+func (r *Router) AddPatch(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodPatch, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddDelete(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodDelete], path, handleFunc...)
+func (r *Router) AddDelete(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodDelete, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddConnect(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodConnect], path, handleFunc...)
+func (r *Router) AddConnect(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodConnect, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddOptions(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodOptions], path, handleFunc...)
+func (r *Router) AddOptions(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodOptions, path, handleFunc...)
 }
 
-func (r *MethodRouter) AddTrace(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.add(&r.route[methodTrace], path, handleFunc...)
+func (r *Router) AddTrace(path string, handleFunc ...HandleFunc) (*Route, error) {
+	return r.Add(http.MethodTrace, path, handleFunc...)
 }
 
 // Try to add a local static file route handler.
@@ -125,7 +132,7 @@ func (r *MethodRouter) AddTrace(path string, handleFunc ...HandleFunc) (*Route, 
 // and file extension in removeFileExt list will be removed.
 // Example: "index.html" -> "index".
 // If cache is true, use CachaHandler, else use FileHandler.
-func (r *MethodRouter) AddStatic(method, route, file string, cache bool, removeFileExt ...string) error {
+func (r *Router) AddStatic(method, route, file string, cache bool, removeFileExt ...string) error {
 	fi, err := os.Stat(file)
 	if err != nil {
 		return err
@@ -182,193 +189,123 @@ func (r *MethodRouter) AddStatic(method, route, file string, cache bool, removeF
 }
 
 // Try to find Route from method route table by path. Return nil if not found.
-func (r *MethodRouter) Route(method, path string) *Route {
+func (r *Router) Route(method, path string) *Route {
 	root := r.root(method)
 	if root == nil {
 		return nil
 	}
-	return root.get(path)
+	return root.Find(path)
 }
 
-func (r *MethodRouter) RouteGet(path string) *Route {
-	return r.route[methodGet].get(path)
+func (r *Router) RouteGet(path string) *Route {
+	return r.Route(http.MethodGet, path)
 }
 
-func (r *MethodRouter) RouteHead(path string) *Route {
-	return r.route[methodHead].get(path)
+func (r *Router) RouteHead(path string) *Route {
+	return r.Route(http.MethodHead, path)
 }
 
-func (r *MethodRouter) RoutePost(path string) *Route {
-	return r.route[methodPost].get(path)
+func (r *Router) RoutePost(path string) *Route {
+	return r.Route(http.MethodPost, path)
 }
 
-func (r *MethodRouter) RoutePut(path string) *Route {
-	return r.route[methodPut].get(path)
+func (r *Router) RoutePut(path string) *Route {
+	return r.Route(http.MethodPut, path)
 }
 
-func (r *MethodRouter) RoutePatch(path string) *Route {
-	return r.route[methodPatch].get(path)
+func (r *Router) RoutePatch(path string) *Route {
+	return r.Route(http.MethodPatch, path)
 }
 
-func (r *MethodRouter) RouteDelete(path string) *Route {
-	return r.route[methodDelete].get(path)
+func (r *Router) RouteDelete(path string) *Route {
+	return r.Route(http.MethodDelete, path)
 }
 
-func (r *MethodRouter) RouteConnect(path string) *Route {
-	return r.route[methodConnect].get(path)
+func (r *Router) RouteConnect(path string) *Route {
+	return r.Route(http.MethodConnect, path)
 }
 
-func (r *MethodRouter) RouteOptions(path string) *Route {
-	return r.route[methodOptions].get(path)
+func (r *Router) RouteOptions(path string) *Route {
+	return r.Route(http.MethodOptions, path)
 }
 
-func (r *MethodRouter) RouteTrace(path string) *Route {
-	return r.route[methodTrace].get(path)
+func (r *Router) RouteTrace(path string) *Route {
+	return r.Route(http.MethodTrace, path)
 }
 
 // Try to remove Route from method route table by path. Return false if not found.
-func (r *MethodRouter) Remove(method, path string) bool {
+func (r *Router) Remove(method, path string) bool {
 	root := r.root(method)
 	if root == nil {
 		return false
 	}
-	return root.remove(path)
+	return root.Remove(path)
 }
 
-func (r *MethodRouter) RemoveGet(path string) bool {
-	return r.route[methodGet].remove(path)
+func (r *Router) RemoveGet(path string) bool {
+	return r.Remove(http.MethodGet, path)
 }
 
-func (r *MethodRouter) RemoveHead(path string) bool {
-	return r.route[methodHead].remove(path)
+func (r *Router) RemoveHead(path string) bool {
+	return r.Remove(http.MethodHead, path)
 }
 
-func (r *MethodRouter) RemovePost(path string) bool {
-	return r.route[methodPost].remove(path)
+func (r *Router) RemovePost(path string) bool {
+	return r.Remove(http.MethodPost, path)
 }
 
-func (r *MethodRouter) RemovePut(path string) bool {
-	return r.route[methodPut].remove(path)
+func (r *Router) RemovePut(path string) bool {
+	return r.Remove(http.MethodPut, path)
 }
 
-func (r *MethodRouter) RemovePatch(path string) bool {
-	return r.route[methodPatch].remove(path)
+func (r *Router) RemovePatch(path string) bool {
+	return r.Remove(http.MethodPatch, path)
 }
 
-func (r *MethodRouter) RemoveDelete(path string) bool {
-	return r.route[methodDelete].remove(path)
+func (r *Router) RemoveDelete(path string) bool {
+	return r.Remove(http.MethodDelete, path)
 }
 
-func (r *MethodRouter) RemoveConnect(path string) bool {
-	return r.route[methodConnect].remove(path)
+func (r *Router) RemoveConnect(path string) bool {
+	return r.Remove(http.MethodConnect, path)
 }
 
-func (r *MethodRouter) RemoveOptions(path string) bool {
-	return r.route[methodOptions].remove(path)
+func (r *Router) RemoveOptions(path string) bool {
+	return r.Remove(http.MethodOptions, path)
 }
 
-func (r *MethodRouter) RemoveTrace(path string) bool {
-	return r.route[methodTrace].remove(path)
+func (r *Router) RemoveTrace(path string) bool {
+	return r.Remove(http.MethodTrace, path)
 }
 
 // Return root Route from method table.
-func (r *MethodRouter) root(method string) *Route {
+func (r *Router) root(method string) *rootRoute {
 	if method[0] == 'G' {
-		return &r.route[methodGet]
+		return &r.getRoot
 	}
 	if method[0] == 'H' {
-		return &r.route[methodHead]
+		return &r.headRoot
 	}
 	if method[0] == 'D' {
-		return &r.route[methodDelete]
+		return &r.deleteRoot
 	}
 	if method[0] == 'C' {
-		return &r.route[methodConnect]
+		return &r.connectRoot
 	}
 	if method[0] == 'O' {
-		return &r.route[methodOptions]
+		return &r.optionsRoot
 	}
 	if method[0] == 'T' {
-		return &r.route[methodTrace]
+		return &r.traceRoot
 	}
 	if method[1] == 'O' {
-		return &r.route[methodPost]
+		return &r.postRoot
 	}
 	if method[1] == 'U' {
-		return &r.route[methodPut]
+		return &r.putRoot
 	}
 	if method[1] == 'A' {
-		return &r.route[methodPatch]
+		return &r.patchRoot
 	}
 	return nil
-}
-
-// Add route path and
-func (r *MethodRouter) add(root *Route, path string, handleFunc ...HandleFunc) (*Route, error) {
-	route, err := root.add(path)
-	if err != nil {
-		return nil, err
-	}
-	route.Handle = handleFunc
-	return route, nil
-}
-
-// Match http url, useful for api gateway.
-type PathRouter struct {
-	route     Route
-	Intercept []HandleFunc
-	NotMatch  []HandleFunc
-}
-
-func (r *PathRouter) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	c := contextPool.Get().(*Context)
-	c.Req = req
-	c.Res = res
-	c.Param = c.Param[:0]
-	c.Data = nil
-	// Intercept chain.
-	for i := 0; i < len(r.Intercept); i++ {
-		if !r.Intercept[i](c) {
-			contextPool.Put(c)
-			return
-		}
-	}
-	// Try to match route.
-	route := r.route.match(c)
-	if route != nil && len(route.Handle) > 0 {
-		for _, h := range route.Handle {
-			if !h(c) {
-				break
-			}
-		}
-		contextPool.Put(c)
-		return
-	}
-	// Not match
-	for i := 0; i < len(r.NotMatch); i++ {
-		if !r.NotMatch[i](c) {
-			break
-		}
-	}
-	contextPool.Put(c)
-}
-
-// Try to add a route.
-func (r *PathRouter) Add(path string, handleFunc ...HandleFunc) (*Route, error) {
-	route, err := r.route.add(path)
-	if err != nil {
-		return nil, err
-	}
-	route.Handle = handleFunc
-	return route, nil
-}
-
-// Try to return a Route.
-func (r *PathRouter) Route(path string) *Route {
-	return r.route.get(path)
-}
-
-// Try to remove a Route.
-func (r *PathRouter) Remove(path string) bool {
-	return r.route.remove(path)
 }

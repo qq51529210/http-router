@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-type HandleFunc func(*Context) bool
-
 // Handle static file.
 type FileHandler struct {
 	// Local file path.
@@ -21,9 +19,8 @@ type FileHandler struct {
 }
 
 // Can be use as HandlerFunc
-func (h *FileHandler) Handle(c *Context) bool {
+func (h *FileHandler) Handle(c *Context) {
 	http.ServeFile(c.Res, c.Req, h.File)
-	return true
 }
 
 var errSeekOffset = errors.New("seek: invalid offset")
@@ -108,7 +105,7 @@ type CacheHandler struct {
 
 // Check client compressions and response compressed data.
 // Can be use as HandlerFunc.
-func (h *CacheHandler) Handle(c *Context) bool {
+func (h *CacheHandler) Handle(c *Context) {
 	if h.ContentType != "" {
 		c.Res.Header().Set("Content-Type", h.ContentType)
 	}
@@ -117,20 +114,19 @@ func (h *CacheHandler) Handle(c *Context) bool {
 		switch s {
 		case "*", "gzip":
 			h.serveContent(c, gzipCompress)
-			return true
+			return
 		case "zlib":
 			h.serveContent(c, zlibCompress)
-			return true
+			return
 		case "deflate":
 			h.serveContent(c, deflateCompress)
-			return true
+			return
 		default:
 			continue
 		}
 	}
 	// Handler does not has client compressions.
 	http.ServeContent(c.Res, c.Req, "", h.ModTime, &cacheSeeker{b: h.Data})
-	return true
 }
 
 // Compress data and response. But if compressed data is bigger than origin data, return origin data.
