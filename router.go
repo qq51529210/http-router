@@ -33,6 +33,8 @@ type Router struct {
 	intercept []HandleFunc
 	// notfound chain if match route failed.
 	notfound []HandleFunc
+	// release chain will called anyway.
+	release []HandleFunc
 }
 
 func (r *Router) SetIntercept(handleFunc ...HandleFunc) {
@@ -41,6 +43,10 @@ func (r *Router) SetIntercept(handleFunc ...HandleFunc) {
 
 func (r *Router) SetNotfound(handleFunc ...HandleFunc) {
 	r.notfound = handleFunc
+}
+
+func (r *Router) SetRelease(handleFunc ...HandleFunc) {
+	r.release = handleFunc
 }
 
 // Implements http.Handler
@@ -53,6 +59,11 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	// Intercept chain.
 	for _, h := range r.intercept {
 		if !h(c) {
+			for _, h := range r.release {
+				if !h(c) {
+					break
+				}
+			}
 			contextPool.Put(c)
 			return
 		}
@@ -67,12 +78,22 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 					break
 				}
 			}
+			for _, h := range r.release {
+				if !h(c) {
+					break
+				}
+			}
 			contextPool.Put(c)
 			return
 		}
 	}
 	// No match.
 	for _, h := range r.notfound {
+		if !h(c) {
+			break
+		}
+	}
+	for _, h := range r.release {
 		if !h(c) {
 			break
 		}

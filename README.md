@@ -88,9 +88,8 @@ if err != nil{
 Your business code may like this:
 
 ```go
-var router Router
-
-func intercept1 (c *Context) {
+func intercept1 (c *Context) bool {
+  // First handler, init data.
   c.Data = initData()
   if c.Data == nil {
     return false
@@ -98,20 +97,49 @@ func intercept1 (c *Context) {
   return true
 }
 
-func intercept2 (c *Context) {
+func intercept2 (c *Context) bool {
   handleData(c.Data)
+  return true
 }
 
-func handle1 (c *Context) {
+func handle1 (c *Context) bool {
   if nextHandleData(c.Data) {
-    c.Next()
+    return true
   }
+  return false
 }
 
-func handle2 (c *Context) {
-  
+func handle2 (c *Context) bool {
+  return true
 }
 
+func release (c *Context) bool {
+  // release data.
+  releaseData(c.Data)
+  return true
+}
+
+var router Router
+router.SetRelease(release)
+router.SetIntercept(intercept1, intercept2)
+router.AddGet("/somepath", handle1, handle2)
+```
+
+Call chains like this:
+
+```go
+func ServeHTTP(){
+  context
+  if !intercept(context){
+    release(context)
+  }
+  if !match(){
+    nofound(context)
+    release(context)
+  }
+  handle(context)
+  release(context)
+}
 ```
 
 
