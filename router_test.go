@@ -80,23 +80,25 @@ func (r *testHandler) Reset() {
 	r.funcs = make([]string, 0)
 }
 
-func (r *testHandler) Intercept(c *Context) {
+func (r *testHandler) Intercept(c *Context) bool {
 	r.funcs = append(r.funcs, "Intercept")
+	return true
 }
 
-func (r *testHandler) Notfound(c *Context) {
+func (r *testHandler) Notfound(c *Context) bool {
 	r.funcs = append(r.funcs, "Notfound")
+	return true
 }
 
-func (r *testHandler) Handle1(c *Context) {
+func (r *testHandler) Handle1(c *Context) bool {
 	r.funcs = append(r.funcs, "Handle1")
 	r.param = append(r.param, c.Param...)
-	c.Next()
+	return true
 }
 
-func (r *testHandler) Handle2(c *Context) {
+func (r *testHandler) Handle2(c *Context) bool {
 	r.funcs = append(r.funcs, "Handle2")
-	c.Next()
+	return true
 }
 
 func testHttpGet(url string, handler *testHandler, router http.Handler) {
@@ -147,7 +149,7 @@ func testMustNotAdd(t *testing.T, r *rootRoute, s string) {
 	}
 }
 
-func Test_Router_Add_Match(t *testing.T) {
+func Test_Add_Match(t *testing.T) {
 	root := new(rootRoute)
 	// Test add.
 	{
@@ -207,16 +209,17 @@ func Test_Router_Add_Match(t *testing.T) {
 	}
 }
 
-func Test_Router_Remove(t *testing.T) {
+func Test_Remove(t *testing.T) {
 	var root rootRoute
 	var route *Route
+	var handle = func(c *Context) bool { return true }
 	// Add
 	route, _ = root.Add("/1")
-	route.Handle = append(route.Handle, func(c *Context) {})
+	route.Handle = append(route.Handle, handle)
 	route, _ = root.Add("/1/:")
-	route.Handle = append(route.Handle, func(c *Context) {})
+	route.Handle = append(route.Handle, handle)
 	route, _ = root.Add("/1/:/3")
-	route.Handle = append(route.Handle, func(c *Context) {})
+	route.Handle = append(route.Handle, handle)
 	// Remove a non existent route。
 	if root.Remove("/12") {
 		t.FailNow()
@@ -364,10 +367,10 @@ func (t *testBenchmark) Init() {
 		t.paramStaticUrl[2].WriteString(fmt.Sprintf("/param%d/static%d", i, i))
 	}
 	// my
-	t.myRouter.AddGet(t.staticRoute.String(), func(c *Context) {})
-	t.myRouter.AddGet(t.paramRoute[0].String(), func(c *Context) {})
-	t.myRouter.AddGet(t.staticParamRoute[0].String(), func(c *Context) {})
-	t.myRouter.AddGet(t.paramStaticRoute[0].String(), func(c *Context) {})
+	t.myRouter.AddGet(t.staticRoute.String(), func(c *Context) bool { return true })
+	t.myRouter.AddGet(t.paramRoute[0].String(), func(c *Context) bool { return true })
+	t.myRouter.AddGet(t.staticParamRoute[0].String(), func(c *Context) bool { return true })
+	t.myRouter.AddGet(t.paramStaticRoute[0].String(), func(c *Context) bool { return true })
 	// // gin
 	// gin.SetMode(gin.ReleaseMode)
 	// t.ginRouter = gin.New()
@@ -406,8 +409,9 @@ func (t *testBenchmark) benchmark(b *testing.B, url string, r http.Handler) {
 func Test_Benchmark(t *testing.T) {
 	var handler testHandler
 	testBench := testNewBenchmark()
-	testBench.myRouter.SetNotfound(func(c *Context) {
+	testBench.myRouter.SetNotfound(func(c *Context) bool {
 		t.FailNow()
+		return false
 	})
 	testHttpGet(testBench.staticUrl.String(), &handler, &testBench.myRouter)
 	testHttpGet(testBench.paramUrl[0].String(), &handler, &testBench.myRouter)

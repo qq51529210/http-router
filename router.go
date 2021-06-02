@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-type HandleFunc func(*Context)
+type HandleFunc func(*Context) bool
 
 // Match http method and url.
 // Route path example:
@@ -50,30 +50,33 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	c.Res = res
 	c.Param = c.Param[:0]
 	c.Data = nil
-	c.handle = r.intercept
-	c.index = -1
 	// Intercept chain.
-	c.Next()
-	if c.abort {
-		contextPool.Put(c)
-		return
+	for _, h := range r.intercept {
+		if !h(c) {
+			contextPool.Put(c)
+			return
+		}
 	}
 	// Try to match route.
 	rootRoute := r.root(req.Method)
 	if rootRoute != nil {
 		route := rootRoute.Match(c)
 		if route != nil {
-			c.handle = route.Handle
-			c.index = -1
-			c.Next()
+			for _, h := range route.Handle {
+				if !h(c) {
+					break
+				}
+			}
 			contextPool.Put(c)
 			return
 		}
 	}
 	// No match.
-	c.handle = r.notfound
-	c.index = -1
-	c.Next()
+	for _, h := range r.notfound {
+		if !h(c) {
+			break
+		}
+	}
 	contextPool.Put(c)
 }
 

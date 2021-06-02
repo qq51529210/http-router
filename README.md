@@ -85,6 +85,37 @@ if err != nil{
   panic(err)
 }
 ```
+Your business code may like this:
+
+```go
+var router Router
+
+func intercept1 (c *Context) {
+  c.Data = initData()
+  if c.Data == nil {
+    return false
+  }
+  return true
+}
+
+func intercept2 (c *Context) {
+  handleData(c.Data)
+}
+
+func handle1 (c *Context) {
+  if nextHandleData(c.Data) {
+    c.Next()
+  }
+}
+
+func handle2 (c *Context) {
+  
+}
+
+```
+
+
+
 ## Benchmark
 
 Compared with the popular framework beego and gin. 
