@@ -4,8 +4,17 @@ A http router written in GO。
 
 ## Route path
 - Param "/users/:", add"/users/*" or "/users/root" will return error. 
+
 - All match "/users/\*", add"/users/any_path" will return error. 
+
 - Static "/users".
+
+## Call chain cases
+- intercept -> filter -> handle -> release. 
+
+- intercept -> release. 
+
+- intercept -> notfound -> release.
 
 ## Useage
 
@@ -109,10 +118,10 @@ func filter1 (c *Context) bool {
 
 
 func handle1 (c *Context) bool {
-  if nextHandleData(c.Data) {
-    return true
+  if handleData(c.Data, c.Param[0]) {
+  	return false
   }
-  return false
+  return true
 }
 
 func handle2 (c *Context) bool {
@@ -133,8 +142,8 @@ var router Router
 router.SetRelease(release)
 router.SetIntercept(intercept1, intercept2)
 router.SetFilter(filter1)
-router.AddGet("/path1", handle1, handle2)
-router.AddGet("/path2", handle3)
+router.AddGet("/path1/:", handle1, handle2)
+router.AddGet("/path2/:", handle3)
 ```
 
 Call chains like this:
