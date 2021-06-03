@@ -13,6 +13,12 @@ import (
 
 type HandleFunc func(*Context) bool
 
+// Notfound response status code 404.
+func Notfound(c *Context) bool {
+	c.Res.WriteHeader(http.StatusNotFound)
+	return true
+}
+
 // Match http method and url path.
 // Route path example:
 // Param route: "/:", no need to know name, because we know the order.

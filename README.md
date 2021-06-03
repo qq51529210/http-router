@@ -139,6 +139,8 @@ func release (c *Context) bool {
 }
 
 var router Router
+// Must set notfound to handle no match case.
+router.SetNotfound(Notfound)
 router.SetRelease(release)
 router.SetIntercept(intercept1, intercept2)
 router.SetFilter(filter1)
