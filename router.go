@@ -13,11 +13,15 @@ import (
 
 type HandleFunc func(*Context) bool
 
-// Match http method and url.
+// Match http method and url path.
 // Route path example:
 // Param route: "/:", no need to know name, because we know the order.
 // All match route: "/*", add any path after this route will return error.
 // Static route: "/users".
+// Chain cases:
+// intercept -> filter -> handle -> release
+// intercept -> release
+// intercept -> notfound -> release
 type Router struct {
 	// Route table.
 	getRoot     rootRoute
@@ -29,12 +33,18 @@ type Router struct {
 	connectRoot rootRoute
 	optionsRoot rootRoute
 	traceRoot   rootRoute
-	// Intercept chain before match route.
+	// Before match.
 	intercept []HandleFunc
-	// notfound chain if match route failed.
+	// No match.
 	notfound []HandleFunc
-	// release chain will called anyway.
+	// After match before handle
+	filter []HandleFunc
+	// Anyway.
 	release []HandleFunc
+}
+
+func (r *Router) SetFilter(handleFunc ...HandleFunc) {
+	r.filter = handleFunc
 }
 
 func (r *Router) SetIntercept(handleFunc ...HandleFunc) {
@@ -56,9 +66,10 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	c.Res = res
 	c.Param = c.Param[:0]
 	c.Data = nil
-	// Intercept chain.
+	// Intercept.
 	for _, h := range r.intercept {
 		if !h(c) {
+			// Release.
 			for _, h := range r.release {
 				if !h(c) {
 					break
@@ -73,11 +84,19 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	if rootRoute != nil {
 		route := rootRoute.Match(c)
 		if route != nil {
+			// Filter.
+			for _, h := range r.filter {
+				if !h(c) {
+					break
+				}
+			}
+			// Handler.
 			for _, h := range route.Handle {
 				if !h(c) {
 					break
 				}
 			}
+			// Release.
 			for _, h := range r.release {
 				if !h(c) {
 					break
@@ -87,12 +106,13 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	// No match.
+	// Notfound.
 	for _, h := range r.notfound {
 		if !h(c) {
 			break
 		}
 	}
+	// Release.
 	for _, h := range r.release {
 		if !h(c) {
 			break

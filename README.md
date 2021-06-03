@@ -102,6 +102,12 @@ func intercept2 (c *Context) bool {
   return true
 }
 
+func filter1 (c *Context) bool {
+  filterData(c.Data)
+  return true
+}
+
+
 func handle1 (c *Context) bool {
   if nextHandleData(c.Data) {
     return true
@@ -110,6 +116,10 @@ func handle1 (c *Context) bool {
 }
 
 func handle2 (c *Context) bool {
+  return true
+}
+
+func handle3 (c *Context) bool {
   return true
 }
 
@@ -122,7 +132,9 @@ func release (c *Context) bool {
 var router Router
 router.SetRelease(release)
 router.SetIntercept(intercept1, intercept2)
-router.AddGet("/somepath", handle1, handle2)
+router.SetFilter(filter1)
+router.AddGet("/path1", handle1, handle2)
+router.AddGet("/path2", handle3)
 ```
 
 Call chains like this:
@@ -134,9 +146,10 @@ func ServeHTTP(){
     release(context)
   }
   if !match(){
-    nofound(context)
+    notfound(context)
     release(context)
   }
+  filter(context)
   handle(context)
   release(context)
 }
