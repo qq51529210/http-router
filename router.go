@@ -76,12 +76,7 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	for _, h := range r.intercept {
 		if !h(c) {
 			// Release.
-			for _, h := range r.release {
-				if !h(c) {
-					break
-				}
-			}
-			contextPool.Put(c)
+			r.releaseChain(c)
 			return
 		}
 	}
@@ -93,7 +88,9 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			// Filter.
 			for _, h := range r.filter {
 				if !h(c) {
-					break
+					// Release.
+					r.releaseChain(c)
+					return
 				}
 			}
 			// Handler.
@@ -103,12 +100,7 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 				}
 			}
 			// Release.
-			for _, h := range r.release {
-				if !h(c) {
-					break
-				}
-			}
-			contextPool.Put(c)
+			r.releaseChain(c)
 			return
 		}
 	}
@@ -119,12 +111,7 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		}
 	}
 	// Release.
-	for _, h := range r.release {
-		if !h(c) {
-			break
-		}
-	}
-	contextPool.Put(c)
+	r.releaseChain(c)
 }
 
 // Try to add a route.
@@ -358,4 +345,13 @@ func (r *Router) root(method string) *rootRoute {
 		return &r.patchRoot
 	}
 	return nil
+}
+
+func (r *Router) releaseChain(c *Context) {
+	for _, h := range r.release {
+		if !h(c) {
+			break
+		}
+	}
+	contextPool.Put(c)
 }
