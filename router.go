@@ -83,7 +83,7 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	rootRoute := r.root(req.Method)
 	if rootRoute != nil {
 		route := rootRoute.Match(c)
-		if route != nil {
+		if route != nil && len(route.Handle) > 0 {
 			// Filter.
 			for _, h := range r.filter {
 				if !h(c) {
