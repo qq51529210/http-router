@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -112,6 +113,8 @@ type Context struct {
 	Param []string
 	// Keep user data in the handler chain.
 	Data interface{}
+	// A cache that you might use.
+	Buff bytes.Buffer
 }
 
 // Set Content-Type and statusCode, convert data to JSON and write to body,
