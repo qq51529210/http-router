@@ -10,7 +10,7 @@ A http router written in GO。
 - Static "/users".
 
 ## Call chain cases
-- intercept -> filter -> handle -> release. 
+- intercept -> handle -> release. 
 
 - intercept -> release. 
 
@@ -111,12 +111,6 @@ func intercept2 (c *Context) bool {
   return true
 }
 
-func filter1 (c *Context) bool {
-  filterData(c.Data)
-  return true
-}
-
-
 func handle1 (c *Context) bool {
   if handleData(c.Data, c.Param[0]) {
   	return false
@@ -143,7 +137,6 @@ var router Router
 router.SetNotfound(Notfound)
 router.SetRelease(release)
 router.SetIntercept(intercept1, intercept2)
-router.SetFilter(filter1)
 router.AddGet("/path1/:", handle1, handle2)
 router.AddGet("/path2/:", handle3)
 ```
@@ -160,7 +153,6 @@ func ServeHTTP(){
     notfound(context)
     release(context)
   }
-  filter(context)
   handle(context)
   release(context)
 }

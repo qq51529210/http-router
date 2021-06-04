@@ -43,14 +43,8 @@ type Router struct {
 	intercept []HandleFunc
 	// No match.
 	notfound []HandleFunc
-	// After match before handle
-	filter []HandleFunc
 	// Anyway.
 	release []HandleFunc
-}
-
-func (r *Router) SetFilter(handleFunc ...HandleFunc) {
-	r.filter = handleFunc
 }
 
 func (r *Router) SetIntercept(handleFunc ...HandleFunc) {
@@ -85,14 +79,6 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	if rootRoute != nil {
 		route := rootRoute.Match(c)
 		if route != nil && len(route.Handle) > 0 {
-			// Filter.
-			for _, h := range r.filter {
-				if !h(c) {
-					// Release.
-					r.releaseChain(c)
-					return
-				}
-			}
 			// Handler.
 			for _, h := range route.Handle {
 				if !h(c) {
