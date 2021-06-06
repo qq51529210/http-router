@@ -25,38 +25,32 @@ func Notfound(c *Context) bool {
 // All match route: "/*", add any path after this route will return error.
 // Static route: "/users".
 // Chain cases:
-// intercept -> filter -> handle -> release
-// intercept -> release
-// intercept -> notfound -> release
+// before -> after
+// before -> notfound -> after
+// before -> handler -> after
 type Router struct {
-	// Route table.
-	getRoot     rootRoute
-	headRoot    rootRoute
-	postRoot    rootRoute
-	putRoot     rootRoute
-	patchRoot   rootRoute
-	deleteRoot  rootRoute
-	connectRoot rootRoute
-	optionsRoot rootRoute
-	traceRoot   rootRoute
-	// Before match.
-	intercept []HandleFunc
-	// No match.
+	// Root route table.
+	// 0=get, 1=head, 2=delete, 3=connect, 4=options,
+	// 5=trace, 6=post, 7=put, 8=patch
+	rootRoute [9]rootRoute
+	// Called before match.
+	before []HandleFunc
+	// Called if not match.
 	notfound []HandleFunc
-	// Anyway.
-	release []HandleFunc
+	// Called anyway.
+	after []HandleFunc
 }
 
-func (r *Router) SetIntercept(handleFunc ...HandleFunc) {
-	r.intercept = handleFunc
+func (r *Router) SetBefore(handleFunc ...HandleFunc) {
+	r.before = handleFunc
 }
 
 func (r *Router) SetNotfound(handleFunc ...HandleFunc) {
 	r.notfound = handleFunc
 }
 
-func (r *Router) SetRelease(handleFunc ...HandleFunc) {
-	r.release = handleFunc
+func (r *Router) SetAfter(handleFunc ...HandleFunc) {
+	r.after = handleFunc
 }
 
 // Implements http.Handler
@@ -66,11 +60,15 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	c.Res = res
 	c.Param = c.Param[:0]
 	c.Data = nil
-	// Intercept.
-	for _, h := range r.intercept {
+	// Before.
+	for _, h := range r.before {
 		if !h(c) {
-			// Release.
-			r.releaseChain(c)
+			// After.
+			for _, h := range r.after {
+				if !h(c) {
+					break
+				}
+			}
 			return
 		}
 	}
@@ -85,8 +83,12 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 					break
 				}
 			}
-			// Release.
-			r.releaseChain(c)
+			// After.
+			for _, h := range r.after {
+				if !h(c) {
+					break
+				}
+			}
 			return
 		}
 	}
@@ -96,8 +98,12 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			break
 		}
 	}
-	// Release.
-	r.releaseChain(c)
+	// After.
+	for _, h := range r.after {
+		if !h(c) {
+			break
+		}
+	}
 }
 
 // Try to add a route.
@@ -304,40 +310,31 @@ func (r *Router) RemoveTrace(path string) bool {
 // Return root Route from method table.
 func (r *Router) root(method string) *rootRoute {
 	if method[0] == 'G' {
-		return &r.getRoot
+		return &r.rootRoute[0]
 	}
 	if method[0] == 'H' {
-		return &r.headRoot
+		return &r.rootRoute[1]
 	}
 	if method[0] == 'D' {
-		return &r.deleteRoot
+		return &r.rootRoute[2]
 	}
 	if method[0] == 'C' {
-		return &r.connectRoot
+		return &r.rootRoute[3]
 	}
 	if method[0] == 'O' {
-		return &r.optionsRoot
+		return &r.rootRoute[4]
 	}
 	if method[0] == 'T' {
-		return &r.traceRoot
+		return &r.rootRoute[5]
 	}
 	if method[1] == 'O' {
-		return &r.postRoot
+		return &r.rootRoute[6]
 	}
 	if method[1] == 'U' {
-		return &r.putRoot
+		return &r.rootRoute[7]
 	}
 	if method[1] == 'A' {
-		return &r.patchRoot
+		return &r.rootRoute[8]
 	}
 	return nil
-}
-
-func (r *Router) releaseChain(c *Context) {
-	for _, h := range r.release {
-		if !h(c) {
-			break
-		}
-	}
-	contextPool.Put(c)
 }

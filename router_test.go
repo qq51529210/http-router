@@ -80,8 +80,8 @@ func (r *testHandler) Reset() {
 	r.funcs = make([]string, 0)
 }
 
-func (r *testHandler) Intercept(c *Context) bool {
-	r.funcs = append(r.funcs, "Intercept")
+func (r *testHandler) Before(c *Context) bool {
+	r.funcs = append(r.funcs, "Before")
 	return true
 }
 
@@ -254,7 +254,7 @@ func Test_Remove(t *testing.T) {
 func Test_Router_AddStatic(t *testing.T) {
 	var handler testHandler
 	var router Router
-	router.SetIntercept(handler.Intercept)
+	router.SetBefore(handler.Before)
 	router.SetNotfound(handler.Notfound)
 	// Generate random file data.
 	random := rand.New(rand.NewSource(time.Now().Unix()))
