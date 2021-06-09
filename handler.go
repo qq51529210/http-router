@@ -6,8 +6,13 @@ import (
 	"compress/gzip"
 	"compress/zlib"
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -150,4 +155,24 @@ func (h *CacheHandler) serveContent(c *Context, n int) {
 	}
 	// Response origin data.
 	http.ServeContent(c.Res, c.Req, "", h.ModTime, &cacheSeeker{b: h.Data})
+}
+
+// Local file into cache.
+func CacheHandlerFromFile(file string) (*CacheHandler, error) {
+	fileInfo, err := os.Stat(file)
+	if err != nil {
+		return nil, err
+	}
+	if fileInfo.IsDir() {
+		return nil, fmt.Errorf("%s is a directory", file)
+	}
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	return &CacheHandler{
+		ContentType: mime.TypeByExtension(filepath.Ext(file)),
+		ModTime:     fileInfo.ModTime(),
+		Data:        data,
+	}, nil
 }
