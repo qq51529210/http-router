@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"hash"
@@ -22,12 +23,15 @@ var (
 	// Context pool.
 	contextPool sync.Pool
 	// Content-Type.
-	contentTypeJSON = mime.TypeByExtension(".json")
-	contentTypeHTML = mime.TypeByExtension(".html")
+	ContentTypeJSON = mime.TypeByExtension(".json")
+	ContentTypeHTML = mime.TypeByExtension(".html")
+	ContentTypeJS   = mime.TypeByExtension(".js")
+	ContentTypeCSS  = mime.TypeByExtension(".css")
 	// Hash pool.
 	md5Pool    sync.Pool
 	sha1Pool   sync.Pool
 	sha256Pool sync.Pool
+	sha512Pool sync.Pool
 	// Random bytes, user for Context.RandomXXX
 	randBytes []byte
 	random    = rand.New(rand.NewSource(time.Now().Unix()))
@@ -59,6 +63,13 @@ func init() {
 			hash: sha256.New(),
 			buf:  make([]byte, 0, sha256.Size*2),
 			sum:  make([]byte, sha256.Size),
+		}
+	}
+	sha512Pool.New = func() interface{} {
+		return &hashBuffer{
+			hash: sha512.New(),
+			buf:  make([]byte, 0, sha512.Size*2),
+			sum:  make([]byte, sha512.Size),
 		}
 	}
 	// Random bytes.
@@ -120,7 +131,7 @@ type Context struct {
 // Set Content-Type and statusCode, convert data to JSON and write to body,
 func (c *Context) WriteJSON(statusCode int, data interface{}) error {
 	c.Res.WriteHeader(statusCode)
-	c.Res.Header().Set("Content-Type", contentTypeJSON)
+	c.Res.Header().Set("Content-Type", ContentTypeJSON)
 	enc := json.NewEncoder(c.Res)
 	return enc.Encode(data)
 }
@@ -128,7 +139,7 @@ func (c *Context) WriteJSON(statusCode int, data interface{}) error {
 // Set Content-Type and statusCode, write to text body,
 func (c *Context) WriteHTML(statusCode int, text string) error {
 	c.Res.WriteHeader(statusCode)
-	c.Res.Header().Set("Content-Type", contentTypeHTML)
+	c.Res.Header().Set("Content-Type", ContentTypeHTML)
 	_, err := io.WriteString(c.Res, text)
 	return err
 }
@@ -164,6 +175,11 @@ func (c *Context) SHA1(s string) string {
 // Return hex string of s SHA256 result.
 func (c *Context) SHA256(s string) string {
 	return hashPoolHash(&sha256Pool, s)
+}
+
+// Return hex string of s SHA512 result.
+func (c *Context) SHA512(s string) string {
+	return hashPoolHash(&sha512Pool, s)
 }
 
 // Json response of page query.
