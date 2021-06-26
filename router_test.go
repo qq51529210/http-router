@@ -212,14 +212,14 @@ func Test_Add_Match(t *testing.T) {
 func Test_Remove(t *testing.T) {
 	var root rootRoute
 	var route *Route
-	var handle = func(c *Context) bool { return true }
+	var handler = func(c *Context) bool { return true }
 	// Add
 	route, _ = root.Add("/1")
-	route.Handle = append(route.Handle, handle)
+	route.Handler = append(route.Handler, handler)
 	route, _ = root.Add("/1/:")
-	route.Handle = append(route.Handle, handle)
+	route.Handler = append(route.Handler, handler)
 	route, _ = root.Add("/1/:/3")
-	route.Handle = append(route.Handle, handle)
+	route.Handler = append(route.Handler, handler)
 	// Remove a non existent route。
 	if root.Remove("/12") {
 		t.FailNow()

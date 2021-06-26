@@ -76,9 +76,9 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	rootRoute := r.root(req.Method)
 	if rootRoute != nil {
 		route := rootRoute.Match(c)
-		if route != nil && len(route.Handle) > 0 {
+		if route != nil && len(route.Handler) > 0 {
 			// Handler.
-			for _, h := range route.Handle {
+			for _, h := range route.Handler {
 				if !h(c) {
 					break
 				}
@@ -116,7 +116,7 @@ func (r *Router) Add(method, path string, handleFunc ...HandleFunc) (*Route, err
 	if err != nil {
 		return nil, err
 	}
-	route.Handle = handleFunc
+	route.Handler = handleFunc
 	return route, nil
 }
 

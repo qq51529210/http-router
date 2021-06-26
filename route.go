@@ -75,7 +75,7 @@ func splitRoute(_path string) ([]string, error) {
 
 // A route of a route tree.
 type Route struct {
-	Handle []HandleFunc
+	Handler []HandleFunc
 	// Use for remove sub route.
 	parent *Route
 	// Full path from root.Used for return a error.
@@ -87,6 +87,16 @@ type Route struct {
 	static [256]*Route
 	// Param sub route. A route can only has one param sub route.
 	param *Route
+}
+
+// Exec all handlers.
+func (r *Route) Handle(c *Context) bool {
+	for _, h := range r.Handler {
+		if !h(c) {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *Route) add(name string) *Route {
@@ -181,13 +191,13 @@ func (r *Route) addStatic(name string) (*Route, error) {
 // Add a new sub route, copy r's data to new route.
 func (r *Route) moveToNewSub(name string) error {
 	// Save r's data.
-	handle := r.Handle
+	handler := r.Handler
 	staic := r.static
 	param := r.param
 	// Modify r's data.
 	r.path = r.path[:len(r.path)-len(name)]
 	r.name = r.name[:len(r.name)-len(name)]
-	r.Handle = nil
+	r.Handler = nil
 	r.removeAllStatic()
 	r.param = nil
 	// Add a new static route.
@@ -195,7 +205,7 @@ func (r *Route) moveToNewSub(name string) error {
 	if err != nil {
 		return err
 	}
-	sub.Handle = handle
+	sub.Handler = handler
 	sub.static = staic
 	sub.param = param
 	return nil
@@ -301,7 +311,7 @@ func (r *rootRoute) Remove(path string) bool {
 		// Reset root route.
 		if route == &r.route {
 			route.path = ""
-			route.Handle = nil
+			route.Handler = nil
 			route.name = ""
 			route.removeAllStatic()
 			route.param = nil
@@ -314,7 +324,7 @@ func (r *rootRoute) Remove(path string) bool {
 		} else {
 			parent.static[route.name[0]] = nil
 		}
-		if len(parent.Handle) > 0 {
+		if len(parent.Handler) > 0 {
 			return true
 		}
 		// Parent has no handlers, if it has only one static sub, join them.
@@ -334,7 +344,7 @@ func (r *rootRoute) Remove(path string) bool {
 			if len(static) == 1 {
 				sub := route.static[static[0]]
 				route.path = sub.path
-				route.Handle = sub.Handle
+				route.Handler = sub.Handler
 				route.name += sub.name
 				if sub.param != nil {
 					sub.param.parent = route
