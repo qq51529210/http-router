@@ -75,7 +75,7 @@ func splitRoute(_path string) ([]string, error) {
 
 // A route of a route tree.
 type Route struct {
-	Handler []HandleFunc
+	Handler []HandlerFunc
 	// Use for remove sub route.
 	parent *Route
 	// Full path from root.Used for return a error.

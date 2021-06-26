@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-type HandleFunc func(*Context) bool
+type HandlerFunc func(*Context) bool
 
 // Notfound response status code 404.
 func Notfound(c *Context) bool {
@@ -34,23 +34,23 @@ type Router struct {
 	// 5=trace, 6=post, 7=put, 8=patch
 	rootRoute [9]rootRoute
 	// Called before match.
-	before []HandleFunc
+	before []HandlerFunc
 	// Called if not match.
-	notfound []HandleFunc
+	notfound []HandlerFunc
 	// Called anyway.
-	after []HandleFunc
+	after []HandlerFunc
 }
 
-func (r *Router) SetBefore(handleFunc ...HandleFunc) {
-	r.before = handleFunc
+func (r *Router) SetBefore(funcs ...HandlerFunc) {
+	r.before = funcs
 }
 
-func (r *Router) SetNotfound(handleFunc ...HandleFunc) {
-	r.notfound = handleFunc
+func (r *Router) SetNotfound(funcs ...HandlerFunc) {
+	r.notfound = funcs
 }
 
-func (r *Router) SetAfter(handleFunc ...HandleFunc) {
-	r.after = handleFunc
+func (r *Router) SetAfter(funcs ...HandlerFunc) {
+	r.after = funcs
 }
 
 // Implements http.Handler
@@ -107,7 +107,7 @@ func (r *Router) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 }
 
 // Try to add a route.
-func (r *Router) Add(method, path string, handleFunc ...HandleFunc) (*Route, error) {
+func (r *Router) Add(method, path string, funcs ...HandlerFunc) (*Route, error) {
 	root := r.root(method)
 	if root == nil {
 		return nil, fmt.Errorf("invalid http method '%s'", method)
@@ -116,44 +116,44 @@ func (r *Router) Add(method, path string, handleFunc ...HandleFunc) (*Route, err
 	if err != nil {
 		return nil, err
 	}
-	route.Handler = handleFunc
+	route.Handler = funcs
 	return route, nil
 }
 
-func (r *Router) AddGet(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodGet, path, handleFunc...)
+func (r *Router) AddGet(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodGet, path, funcs...)
 }
 
-func (r *Router) AddHead(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodHead, path, handleFunc...)
+func (r *Router) AddHead(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodHead, path, funcs...)
 }
 
-func (r *Router) AddPost(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodPost, path, handleFunc...)
+func (r *Router) AddPost(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodPost, path, funcs...)
 }
 
-func (r *Router) AddPut(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodPut, path, handleFunc...)
+func (r *Router) AddPut(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodPut, path, funcs...)
 }
 
-func (r *Router) AddPatch(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodPatch, path, handleFunc...)
+func (r *Router) AddPatch(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodPatch, path, funcs...)
 }
 
-func (r *Router) AddDelete(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodDelete, path, handleFunc...)
+func (r *Router) AddDelete(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodDelete, path, funcs...)
 }
 
-func (r *Router) AddConnect(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodConnect, path, handleFunc...)
+func (r *Router) AddConnect(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodConnect, path, funcs...)
 }
 
-func (r *Router) AddOptions(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodOptions, path, handleFunc...)
+func (r *Router) AddOptions(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodOptions, path, funcs...)
 }
 
-func (r *Router) AddTrace(path string, handleFunc ...HandleFunc) (*Route, error) {
-	return r.Add(http.MethodTrace, path, handleFunc...)
+func (r *Router) AddTrace(path string, funcs ...HandlerFunc) (*Route, error) {
+	return r.Add(http.MethodTrace, path, funcs...)
 }
 
 // Try to add a local static file route handler.
