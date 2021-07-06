@@ -136,6 +136,14 @@ func (c *Context) WriteJSON(statusCode int, data interface{}) error {
 	return enc.Encode(data)
 }
 
+// Set Content-Type and statusCode, write data to body,
+func (c *Context) WriteJSONBytes(statusCode int, data []byte) error {
+	c.Res.WriteHeader(statusCode)
+	c.Res.Header().Set("Content-Type", ContentTypeJSON)
+	_, err := c.Res.Write(data)
+	return err
+}
+
 // Set Content-Type and statusCode, write to text body,
 func (c *Context) WriteHTML(statusCode int, text string) error {
 	c.Res.WriteHeader(statusCode)
