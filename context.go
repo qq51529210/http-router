@@ -192,9 +192,9 @@ type PageData struct {
 
 // Page query conditions.
 type PageQuery struct {
-	// ASC or DESC.
-	Order string
 	// Field name used for sort data.
+	Order string
+	// ASC or DESC.
 	Sort string
 	// Begin of data.
 	Begin int64
@@ -203,7 +203,7 @@ type PageQuery struct {
 }
 
 // Try to parse url queries value to q.
-// Example: "/users?sort=id&order=desc&begin=1&total=10".
+// Example: "/users?order=id&sort=desc&begin=1&total=10".
 // It return error if fail to parse begin or total.
 func (c *Context) ParsePageQuery(q *PageQuery) error {
 	order := c.Req.FormValue("order")
