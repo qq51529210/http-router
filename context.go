@@ -204,8 +204,8 @@ type PageQuery struct {
 
 // Try to parse url queries value to q.
 // Example: "/users?order=id&sort=desc&begin=1&total=10".
-// It return error if fail to parse begin or total.
-func (c *Context) ParsePageQuery(q *PageQuery) error {
+// It return query name if fail to parse begin or total.
+func (c *Context) ParsePageQuery(q *PageQuery) string {
 	order := c.Req.FormValue("order")
 	if order != "" {
 		q.Order = order
@@ -218,7 +218,7 @@ func (c *Context) ParsePageQuery(q *PageQuery) error {
 	if val != "" {
 		begin, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
-			return err
+			return "begin"
 		}
 		q.Begin = begin
 	}
@@ -226,11 +226,11 @@ func (c *Context) ParsePageQuery(q *PageQuery) error {
 	if val != "" {
 		total, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
-			return err
+			return "total"
 		}
 		q.Total = total
 	}
-	return nil
+	return ""
 }
 
 // Return header["Authorization"] Bearer token.
